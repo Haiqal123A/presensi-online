@@ -1,513 +1,1266 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  FileText,
-  CalendarDays,
-  Send,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import {
   AlertCircle,
+  CalendarDays,
   CheckCircle2,
-  ArrowLeft,
+  FileText,
+  Loader2,
+  RefreshCw,
+  Upload,
+  X,
 } from "lucide-react";
 
-const IZIN_STORAGE_KEY = "pkl_izin";
+import {
+  getMyIzin,
+  submitIzin,
+} from "../../services/api";
+
 const MAX_IZIN_PER_MONTH = 4;
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
-const getTodayKey = () => {
-  const now = new Date();
+const ALLOWED_FILE_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+];
 
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
+function getJakartaDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
 
-  return `${year}-${month}-${day}`;
-};
+  const result = {};
 
-const getCurrentMonthKey = () => {
-  const now = new Date();
-
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-
-  return `${year}-${month}`;
-};
-
-const getIzinData = () => {
-  const savedData = localStorage.getItem(IZIN_STORAGE_KEY);
-
-  if (!savedData) {
-    return [];
-  }
-
-  try {
-    const parsedData = JSON.parse(savedData);
-
-    return Array.isArray(parsedData) ? parsedData : [];
-  } catch (error) {
-    console.error("Gagal membaca data izin:", error);
-
-    return [];
-  }
-};
-
-const formatDate = (date) => {
-  if (!date) return "-";
-
-  return new Date(`${date}T00:00:00`).toLocaleDateString(
-    "id-ID",
-    {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
+  parts.forEach((part) => {
+    if (part.type !== "literal") {
+      result[part.type] = part.value;
     }
+  });
+
+  return result;
+}
+
+function getTodayJakarta() {
+  const parts = getJakartaDateParts();
+
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function getCurrentMonthKey() {
+  const parts = getJakartaDateParts();
+
+  return `${parts.year}-${parts.month}`;
+}
+
+function normalizeDateOnly(value) {
+  if (!value) return null;
+
+  const stringValue = String(value).trim();
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(stringValue)) {
+    return stringValue.slice(0, 10);
+  }
+
+  const dmy = stringValue.match(
+    /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/
   );
-};
+
+  if (dmy) {
+    const day = String(dmy[1]).padStart(2, "0");
+    const month = String(dmy[2]).padStart(2, "0");
+
+    return `${dmy[3]}-${month}-${day}`;
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  const jakarta = getJakartaDateParts(parsed);
+
+  return `${jakarta.year}-${jakarta.month}-${jakarta.day}`;
+}
+
+function formatDate(value) {
+  const normalized = normalizeDateOnly(value);
+
+  if (!normalized) {
+    return "-";
+  }
+
+  const parsed = new Date(`${normalized}T00:00:00`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+
+  return parsed.toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+
+  return parsed.toLocaleString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  });
+}
+
+function getArrayFromResponse(
+  response,
+  preferredKeys = []
+) {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if (!response || typeof response !== "object") {
+    return [];
+  }
+
+  const visited = new Set();
+  const queue = [response];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+
+    if (
+      !current ||
+      typeof current !== "object" ||
+      visited.has(current)
+    ) {
+      continue;
+    }
+
+    visited.add(current);
+
+    for (const key of preferredKeys) {
+      const value = current?.[key];
+
+      if (Array.isArray(value)) {
+        return value;
+      }
+    }
+
+    for (const value of Object.values(current)) {
+      if (Array.isArray(value)) {
+        if (
+          value.length === 0 ||
+          value.some(
+            (item) =>
+              item &&
+              typeof item === "object"
+          )
+        ) {
+          return value;
+        }
+      } else if (
+        value &&
+        typeof value === "object"
+      ) {
+        queue.push(value);
+      }
+    }
+  }
+
+  return [];
+}
+
+function getIzinDate(item) {
+  return normalizeDateOnly(
+    item?.tanggal_mulai ||
+      item?.tanggalMulai ||
+      item?.start_date ||
+      item?.startDate ||
+      item?.date ||
+      item?.tanggal ||
+      item?.attendance_date ||
+      item?.created_at ||
+      item?.createdAt ||
+      item?.submitted_at ||
+      item?.submittedAt
+  );
+}
+
+function getIzinEndDate(item) {
+  return normalizeDateOnly(
+    item?.tanggal_selesai ||
+      item?.tanggalSelesai ||
+      item?.end_date ||
+      item?.endDate ||
+      getIzinDate(item)
+  );
+}
+
+function getIzinType(item) {
+  const raw =
+    item?.tipe_izin ||
+    item?.tipeIzin ||
+    item?.type ||
+    item?.jenis ||
+    "Izin";
+
+  const normalized = String(raw)
+    .trim()
+    .toLowerCase();
+
+  if (normalized === "sakit") {
+    return "Sakit";
+  }
+
+  if (normalized === "izin") {
+    return "Izin";
+  }
+
+  return String(raw);
+}
+
+function getIzinReason(item) {
+  return (
+    item?.alasan ||
+    item?.reason ||
+    item?.keterangan ||
+    "-"
+  );
+}
+
+function getIzinCreatedAt(item) {
+  return (
+    item?.created_at ||
+    item?.createdAt ||
+    item?.submitted_at ||
+    item?.submittedAt ||
+    null
+  );
+}
+
+function getIzinAttachment(item) {
+  return (
+    item?.lampiran ||
+    item?.attachment ||
+    item?.attachment_url ||
+    item?.attachmentUrl ||
+    null
+  );
+}
+
+function normalizeIzinItem(item, index) {
+  return {
+    ...item,
+
+    id:
+      item?.id ||
+      item?._id ||
+      `izin-${index}`,
+
+    type: getIzinType(item),
+
+    date: getIzinDate(item),
+
+    endDate: getIzinEndDate(item),
+
+    reason: getIzinReason(item),
+
+    createdAt: getIzinCreatedAt(item),
+
+    attachment: getIzinAttachment(item),
+  };
+}
+
+function isSameOrAfter(dateA, dateB) {
+  if (!dateA || !dateB) {
+    return false;
+  }
+
+  return dateA >= dateB;
+}
+
+function isValidDateString(value) {
+  if (!value) {
+    return false;
+  }
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
 
 export default function Izin() {
-  const navigate = useNavigate();
+  const today = getTodayJakarta();
+  const currentMonth = getCurrentMonthKey();
 
-  const [tanggal, setTanggal] = useState(getTodayKey());
-  const [jenis, setJenis] = useState("Sakit");
-  const [alasan, setAlasan] = useState("");
+  const fileInputRef = useRef(null);
 
-  const [izinData, setIzinData] = useState(
-    getIzinData()
-  );
+  const [izinType, setIzinType] =
+    useState("izin");
+
+  const [tanggalMulai, setTanggalMulai] =
+    useState(today);
+
+  const [tanggalSelesai, setTanggalSelesai] =
+    useState(today);
+
+  const [alasan, setAlasan] =
+    useState("");
+
+  const [lampiran, setLampiran] =
+    useState(null);
+
+  const [izinData, setIzinData] =
+    useState([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [submitting, setSubmitting] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
 
   const [successMessage, setSuccessMessage] =
     useState("");
 
-  const [errorMessage, setErrorMessage] =
+  const [validationError, setValidationError] =
     useState("");
 
-  const currentMonth = getCurrentMonthKey();
+  const loadIzin = useCallback(
+    async ({ silent = false } = {}) => {
+      try {
+        if (silent) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
 
-  const totalIzinBulanIni = useMemo(() => {
-    return izinData.filter(
-      (item) => item.month === currentMonth
-    ).length;
-  }, [izinData, currentMonth]);
+        setError("");
 
-  const sisaIzin = Math.max(
-    0,
-    MAX_IZIN_PER_MONTH - totalIzinBulanIni
+        const response =
+          await getMyIzin();
+
+        const records =
+          getArrayFromResponse(response, [
+            "izin",
+            "izins",
+            "records",
+            "items",
+            "results",
+            "data",
+          ]);
+
+        const normalized = Array.isArray(
+          records
+        )
+          ? records.map(normalizeIzinItem)
+          : [];
+
+        setIzinData(normalized);
+      } catch (err) {
+        console.error(
+          "Gagal mengambil data izin:",
+          err
+        );
+
+        setError(
+          err?.message ||
+            "Gagal mengambil data izin."
+        );
+
+        setIzinData([]);
+      } finally {
+        if (silent) {
+          setRefreshing(false);
+        } else {
+          setLoading(false);
+        }
+      }
+    },
+    []
   );
 
-  const isLimitReached =
-    totalIzinBulanIni >= MAX_IZIN_PER_MONTH;
+  useEffect(() => {
+    loadIzin();
+  }, [loadIzin]);
 
-  const handleSubmit = (event) => {
+  const izinBulanIni = useMemo(() => {
+    return izinData.filter((item) => {
+      const date = getIzinDate(item);
+
+      return (
+        date &&
+        date.slice(0, 7) ===
+          currentMonth
+      );
+    });
+  }, [izinData, currentMonth]);
+
+  const totalIzinBulanIni =
+    izinBulanIni.length;
+
+  const sisaKuota =
+    Math.max(
+      0,
+      MAX_IZIN_PER_MONTH -
+        totalIzinBulanIni
+    );
+
+  const kuotaHabis =
+    sisaKuota <= 0;
+
+  const handleFileChange = (event) => {
+    const file =
+      event.target.files?.[0] || null;
+
+    setValidationError("");
+    setSuccessMessage("");
+
+    if (!file) {
+      setLampiran(null);
+      return;
+    }
+
+    if (
+      file.size >
+      MAX_FILE_SIZE
+    ) {
+      setLampiran(null);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value =
+          "";
+      }
+
+      setValidationError(
+        "Ukuran lampiran maksimal 5 MB."
+      );
+
+      return;
+    }
+
+    if (
+      !ALLOWED_FILE_TYPES.includes(
+        file.type
+      )
+    ) {
+      setLampiran(null);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value =
+          "";
+      }
+
+      setValidationError(
+        "Format lampiran harus PDF, JPG/JPEG, atau PNG."
+      );
+
+      return;
+    }
+
+    setLampiran(file);
+  };
+
+  const removeFile = () => {
+    setLampiran(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value =
+        "";
+    }
+  };
+
+  const resetForm = () => {
+    setIzinType("izin");
+    setTanggalMulai(today);
+    setTanggalSelesai(today);
+    setAlasan("");
+    setLampiran(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value =
+        "";
+    }
+  };
+
+  const handleSubmit = async (
+    event
+  ) => {
     event.preventDefault();
 
+    setValidationError("");
     setSuccessMessage("");
-    setErrorMessage("");
+    setError("");
 
-    const latestData = getIzinData();
-
-    const latestTotalThisMonth = latestData.filter(
-      (item) => item.month === currentMonth
-    ).length;
-
-    if (latestTotalThisMonth >= MAX_IZIN_PER_MONTH) {
-      setErrorMessage(
-        "Kuota izin bulan ini sudah habis. Maksimal izin adalah 4 kali dalam satu bulan."
+    if (kuotaHabis) {
+      setValidationError(
+        "Kuota izin bulan ini sudah habis. Maksimal 4 izin per bulan."
       );
-
-      setIzinData(latestData);
-
       return;
     }
 
-    if (!tanggal) {
-      setErrorMessage(
-        "Silakan pilih tanggal izin."
+    if (
+      !isValidDateString(
+        tanggalMulai
+      ) ||
+      !isValidDateString(
+        tanggalSelesai
+      )
+    ) {
+      setValidationError(
+        "Tanggal izin belum lengkap."
       );
-
       return;
     }
 
-    if (!alasan.trim()) {
-      setErrorMessage(
-        "Silakan masukkan alasan izin."
+    if (
+      !isSameOrAfter(
+        tanggalSelesai,
+        tanggalMulai
+      )
+    ) {
+      setValidationError(
+        "Tanggal selesai tidak boleh sebelum tanggal mulai."
       );
-
       return;
     }
 
-    const now = new Date();
-
-    const newIzin = {
-      id: Date.now(),
-      date: tanggal,
-      month: tanggal.slice(0, 7),
-      type: jenis,
-      reason: alasan.trim(),
-      createdAt: now.toISOString(),
-    };
-
-    const updatedData = [
-      newIzin,
-      ...latestData,
-    ];
-
-    localStorage.setItem(
-      IZIN_STORAGE_KEY,
-      JSON.stringify(updatedData)
-    );
-
-    setIzinData(updatedData);
-
-    setTanggal(getTodayKey());
-    setJenis("Sakit");
-    setAlasan("");
-
-    setSuccessMessage(
-      "Izin berhasil dicatat dan masuk ke riwayat."
-    );
-
-    setTimeout(() => {
-      navigate(
-        "/user/attendance-history?tab=izin"
+    if (
+      !alasan.trim() ||
+      alasan.trim().length < 5
+    ) {
+      setValidationError(
+        "Alasan minimal 5 karakter."
       );
-    }, 700);
+      return;
+    }
+
+    if (lampiran) {
+      if (
+        lampiran.size >
+        MAX_FILE_SIZE
+      ) {
+        setValidationError(
+          "Ukuran lampiran maksimal 5 MB."
+        );
+        return;
+      }
+
+      if (
+        !ALLOWED_FILE_TYPES.includes(
+          lampiran.type
+        )
+      ) {
+        setValidationError(
+          "Format lampiran tidak didukung."
+        );
+        return;
+      }
+    }
+
+    try {
+      setSubmitting(true);
+
+      await submitIzin({
+        tipeIzin: izinType,
+        tanggalMulai,
+        tanggalSelesai,
+        alasan: alasan.trim(),
+        lampiran,
+      });
+
+      /*
+       * Setelah submit berhasil, langsung ambil
+       * ulang data dari backend.
+       *
+       * Jadi riwayat bukan dummy/localStorage.
+       */
+      await loadIzin({
+        silent: true,
+      });
+
+      setSuccessMessage(
+        "Izin berhasil dicatat dan langsung masuk ke riwayat."
+      );
+
+      resetForm();
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    } catch (err) {
+      console.error(
+        "Gagal mengirim izin:",
+        err
+      );
+
+      setError(
+        err?.message ||
+          "Izin gagal dicatat. Silakan coba lagi."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formatFileSize = (
+    bytes
+  ) => {
+    if (!bytes) return "0 KB";
+
+    if (bytes < 1024 * 1024) {
+      return `${Math.ceil(
+        bytes / 1024
+      )} KB`;
+    }
+
+    return `${(
+      bytes /
+      (1024 * 1024)
+    ).toFixed(2)} MB`;
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div>
-            <div className="flex items-center gap-2 text-brand-blue mb-2">
-              <FileText size={20} />
-
-              <span className="text-sm font-semibold">
-                Izin
-              </span>
-            </div>
-
-            <h1 className="text-2xl font-bold text-gray-900">
-              Izin Tidak Masuk PKL
-            </h1>
-
-            <p className="text-sm text-gray-500 mt-1">
-              Gunakan izin apabila kamu tidak dapat
-              hadir ke tempat PKL.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              navigate(
-                "/user/attendance-history?tab=izin"
-              )
-            }
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition"
-          >
-            <ArrowLeft size={17} />
-            Riwayat Izin
-          </button>
-        </div>
-
-        {/* Kuota */}
-        <div className="bg-brand-blue rounded-2xl p-5 text-white shadow-sm mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {/* HEADER */}
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
-              <p className="text-white/70 text-sm">
-                Penggunaan izin bulan ini
-              </p>
+              <div className="flex items-center gap-2 text-brand-blue mb-2">
+                <FileText size={20} />
 
-              <div className="flex items-end gap-2 mt-1">
-                <span className="text-3xl font-bold">
-                  {totalIzinBulanIni}
-                </span>
-
-                <span className="text-white/70 text-sm mb-1">
-                  / {MAX_IZIN_PER_MONTH} kali
+                <span className="text-sm font-semibold">
+                  Perizinan
                 </span>
               </div>
 
-              <p className="text-white/70 text-xs mt-2">
-                Setiap siswa memiliki maksimal 4 kali
-                izin dalam satu bulan.
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                Pengajuan Izin
+              </h1>
+
+              <p className="text-sm text-gray-500 mt-1">
+                Ajukan izin sakit atau izin keperluan.
               </p>
             </div>
 
-            <div
-              className={`px-5 py-3 rounded-xl ${
-                isLimitReached
-                  ? "bg-red-500/20"
-                  : "bg-white/10"
-              }`}
+            <button
+              type="button"
+              onClick={() =>
+                loadIzin({
+                  silent: true,
+                })
+              }
+              disabled={refreshing}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-bold hover:bg-gray-50 transition disabled:opacity-60"
             >
-              <p className="text-xs text-white/70">
-                Sisa kuota
-              </p>
+              {refreshing ? (
+                <Loader2
+                  size={17}
+                  className="animate-spin"
+                />
+              ) : (
+                <RefreshCw size={17} />
+              )}
 
-              <p className="text-2xl font-bold mt-1">
-                {sisaIzin}
-              </p>
-            </div>
+              Refresh
+            </button>
           </div>
         </div>
 
-        {/* Limit */}
-        {isLimitReached && (
-          <div className="mb-6 flex gap-3 p-4 rounded-2xl bg-red-50 border border-red-100 text-red-700">
-            <AlertCircle
-              size={21}
-              className="shrink-0 mt-0.5"
-            />
-
-            <div>
-              <p className="font-bold text-sm">
-                Kuota izin sudah habis
-              </p>
-
-              <p className="text-sm mt-1 text-red-600">
-                Kamu sudah menggunakan 4 kali izin pada
-                bulan ini. Izin berikutnya dapat digunakan
-                pada bulan berikutnya.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Success */}
+        {/* SUCCESS */}
         {successMessage && (
-          <div className="mb-6 flex gap-3 p-4 rounded-2xl bg-green-50 border border-green-100 text-green-700">
-            <CheckCircle2
-              size={21}
-              className="shrink-0"
-            />
+          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4">
+            <div className="flex items-start gap-3">
+              <CheckCircle2
+                size={21}
+                className="text-green-600 mt-0.5 shrink-0"
+              />
 
-            <div>
-              <p className="font-bold text-sm">
-                Izin berhasil dicatat
-              </p>
+              <div>
+                <p className="font-bold text-green-800">
+                  Berhasil
+                </p>
 
-              <p className="text-sm mt-1 text-green-600">
-                {successMessage}
-              </p>
+                <p className="text-sm text-green-700 mt-1">
+                  {successMessage}
+                </p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Error */}
-        {errorMessage && (
-          <div className="mb-6 flex gap-3 p-4 rounded-2xl bg-red-50 border border-red-100 text-red-700">
-            <AlertCircle
-              size={21}
-              className="shrink-0"
-            />
+        {/* ERROR */}
+        {error && (
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle
+                size={21}
+                className="text-red-600 mt-0.5 shrink-0"
+              />
 
-            <div>
-              <p className="font-bold text-sm">
-                Izin tidak dapat dicatat
-              </p>
+              <div>
+                <p className="font-bold text-red-800">
+                  Terjadi kesalahan
+                </p>
 
-              <p className="text-sm mt-1 text-red-600">
-                {errorMessage}
-              </p>
+                <p className="text-sm text-red-700 mt-1">
+                  {error}
+                </p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Form */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-11 h-11 rounded-xl bg-brand-blue-light text-brand-blue flex items-center justify-center">
-              <FileText size={21} />
-            </div>
-
-            <div>
-              <h2 className="font-bold text-gray-900">
-                Form Izin
-              </h2>
-
-              <p className="text-sm text-gray-500 mt-1">
-                Isi data izin dengan benar.
+        {/* QUOTA */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                Izin Bulan Ini
               </p>
+
+              <div className="w-10 h-10 rounded-xl bg-brand-blue-light text-brand-blue flex items-center justify-center">
+                <FileText size={19} />
+              </div>
             </div>
+
+            <p className="text-3xl font-bold text-brand-blue mt-3">
+              {totalIzinBulanIni}
+            </p>
+
+            <p className="text-xs text-gray-400 mt-1">
+              Pengajuan tercatat
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                Batas Bulanan
+              </p>
+
+              <div className="w-10 h-10 rounded-xl bg-yellow-50 text-yellow-600 flex items-center justify-center">
+                <CalendarDays size={19} />
+              </div>
+            </div>
+
+            <p className="text-3xl font-bold text-gray-900 mt-3">
+              {MAX_IZIN_PER_MONTH}
+            </p>
+
+            <p className="text-xs text-gray-400 mt-1">
+              Maksimal izin per bulan
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                Sisa Kuota
+              </p>
+
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  kuotaHabis
+                    ? "bg-red-50 text-red-600"
+                    : "bg-green-50 text-green-600"
+                }`}
+              >
+                <CheckCircle2 size={19} />
+              </div>
+            </div>
+
+            <p
+              className={`text-3xl font-bold mt-3 ${
+                kuotaHabis
+                  ? "text-red-600"
+                  : "text-green-600"
+              }`}
+            >
+              {sisaKuota}
+            </p>
+
+            <p className="text-xs text-gray-400 mt-1">
+              Izin masih tersedia
+            </p>
+          </div>
+        </div>
+
+        {/* FORM */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-5 sm:p-6 border-b border-gray-100">
+            <h2 className="text-lg font-bold text-gray-900">
+              Form Pengajuan
+            </h2>
+
+            <p className="text-sm text-gray-500 mt-1">
+              Izin yang dikirim akan langsung tercatat tanpa proses persetujuan.
+            </p>
           </div>
 
           <form
             onSubmit={handleSubmit}
-            className="space-y-5"
+            className="p-5 sm:p-6"
           >
-            {/* Tanggal */}
-            <div>
-              <label
-                htmlFor="tanggal"
-                className="block text-sm font-semibold text-gray-700 mb-2"
-              >
-                Tanggal Izin
-              </label>
+            {validationError && (
+              <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle
+                    size={19}
+                    className="text-red-600 mt-0.5 shrink-0"
+                  />
 
-              <div className="relative">
-                <CalendarDays
-                  size={18}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                />
-
-                <input
-                  id="tanggal"
-                  type="date"
-                  value={tanggal}
-                  onChange={(event) =>
-                    setTanggal(event.target.value)
-                  }
-                  disabled={isLimitReached}
-                  className="w-full h-12 pl-11 pr-4 rounded-xl border border-gray-200 bg-white text-gray-800 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 disabled:bg-gray-100 disabled:text-gray-400"
-                />
+                  <p className="text-sm font-semibold text-red-700">
+                    {validationError}
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Jenis */}
-            <div>
-              <label
-                htmlFor="jenis"
-                className="block text-sm font-semibold text-gray-700 mb-2"
-              >
+            {/* TYPE */}
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-700 mb-2">
                 Jenis Izin
               </label>
 
-              <select
-                id="jenis"
-                value={jenis}
-                onChange={(event) =>
-                  setJenis(event.target.value)
-                }
-                disabled={isLimitReached}
-                className="w-full h-12 px-4 rounded-xl border border-gray-200 bg-white text-gray-800 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 disabled:bg-gray-100 disabled:text-gray-400"
-              >
-                <option value="Sakit">
-                  Sakit
-                </option>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIzinType("izin")
+                  }
+                  disabled={
+                    submitting ||
+                    kuotaHabis
+                  }
+                  className={`rounded-xl border p-4 text-left transition ${
+                    izinType === "izin"
+                      ? "border-brand-blue bg-brand-blue-light ring-2 ring-brand-blue/10"
+                      : "border-gray-200 bg-white hover:bg-gray-50"
+                  } disabled:opacity-60`}
+                >
+                  <p
+                    className={`font-bold ${
+                      izinType === "izin"
+                        ? "text-brand-blue"
+                        : "text-gray-800"
+                    }`}
+                  >
+                    Izin
+                  </p>
 
-                <option value="Keperluan Keluarga">
-                  Keperluan Keluarga
-                </option>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Keperluan pribadi
+                  </p>
+                </button>
 
-                <option value="Keperluan Pribadi">
-                  Keperluan Pribadi
-                </option>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIzinType("sakit")
+                  }
+                  disabled={
+                    submitting ||
+                    kuotaHabis
+                  }
+                  className={`rounded-xl border p-4 text-left transition ${
+                    izinType === "sakit"
+                      ? "border-brand-blue bg-brand-blue-light ring-2 ring-brand-blue/10"
+                      : "border-gray-200 bg-white hover:bg-gray-50"
+                  } disabled:opacity-60`}
+                >
+                  <p
+                    className={`font-bold ${
+                      izinType === "sakit"
+                        ? "text-brand-blue"
+                        : "text-gray-800"
+                    }`}
+                  >
+                    Sakit
+                  </p>
 
-                <option value="Keperluan Sekolah">
-                  Keperluan Sekolah
-                </option>
-
-                <option value="Lainnya">
-                  Lainnya
-                </option>
-              </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Tidak dapat mengikuti PKL
+                  </p>
+                </button>
+              </div>
             </div>
 
-            {/* Alasan */}
-            <div>
+            {/* DATE */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
+              <div>
+                <label
+                  htmlFor="tanggalMulai"
+                  className="block text-sm font-bold text-gray-700 mb-2"
+                >
+                  Tanggal Mulai
+                </label>
+
+                <div className="relative">
+                  <CalendarDays
+                    size={18}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                  />
+
+                  <input
+                    id="tanggalMulai"
+                    type="date"
+                    value={tanggalMulai}
+                    onChange={(event) =>
+                      setTanggalMulai(
+                        event.target.value
+                      )
+                    }
+                    disabled={
+                      submitting ||
+                      kuotaHabis
+                    }
+                    className="w-full h-12 rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm font-medium text-gray-700 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 disabled:bg-gray-50"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="tanggalSelesai"
+                  className="block text-sm font-bold text-gray-700 mb-2"
+                >
+                  Tanggal Selesai
+                </label>
+
+                <div className="relative">
+                  <CalendarDays
+                    size={18}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                  />
+
+                  <input
+                    id="tanggalSelesai"
+                    type="date"
+                    value={tanggalSelesai}
+                    onChange={(event) =>
+                      setTanggalSelesai(
+                        event.target.value
+                      )
+                    }
+                    disabled={
+                      submitting ||
+                      kuotaHabis
+                    }
+                    className="w-full h-12 rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm font-medium text-gray-700 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 disabled:bg-gray-50"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* REASON */}
+            <div className="mb-6">
               <label
                 htmlFor="alasan"
-                className="block text-sm font-semibold text-gray-700 mb-2"
+                className="block text-sm font-bold text-gray-700 mb-2"
               >
-                Alasan Izin
+                Alasan
               </label>
 
               <textarea
                 id="alasan"
                 value={alasan}
                 onChange={(event) =>
-                  setAlasan(event.target.value)
+                  setAlasan(
+                    event.target.value
+                  )
                 }
-                disabled={isLimitReached}
+                disabled={
+                  submitting ||
+                  kuotaHabis
+                }
                 rows={5}
-                placeholder="Jelaskan alasan izin kamu..."
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-800 placeholder:text-gray-400 outline-none resize-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 disabled:bg-gray-100 disabled:text-gray-400"
-              />
-            </div>
-
-            {/* Info */}
-            <div className="flex gap-3 p-4 rounded-xl bg-yellow-50 border border-yellow-100">
-              <AlertCircle
-                size={19}
-                className="text-yellow-600 shrink-0 mt-0.5"
+                maxLength={1000}
+                placeholder="Tuliskan alasan izin..."
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none resize-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 disabled:bg-gray-50"
               />
 
-              <div>
-                <p className="text-sm font-semibold text-gray-800">
-                  Informasi izin
-                </p>
-
-                <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                  Izin akan langsung tercatat setelah
-                  kamu mengirimkan form. Setiap siswa
-                  mendapatkan maksimal 4 kali izin dalam
-                  satu bulan.
-                </p>
+              <div className="flex justify-end mt-1">
+                <span className="text-xs text-gray-400">
+                  {alasan.length}/1000
+                </span>
               </div>
             </div>
 
-            {/* Submit */}
+            {/* ATTACHMENT */}
+            <div className="mb-7">
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Lampiran{" "}
+                <span className="font-normal text-gray-400">
+                  (opsional)
+                </span>
+              </label>
+
+              {!lampiran ? (
+                <label
+                  className={`flex flex-col items-center justify-center min-h-32 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center transition ${
+                    submitting ||
+                    kuotaHabis
+                      ? "opacity-50 cursor-not-allowed"
+                      : "cursor-pointer hover:border-brand-blue hover:bg-brand-blue-light/30"
+                  }`}
+                >
+                  <Upload
+                    size={24}
+                    className="text-gray-400 mb-2"
+                  />
+
+                  <p className="text-sm font-semibold text-gray-700">
+                    Pilih lampiran
+                  </p>
+
+                  <p className="text-xs text-gray-400 mt-1">
+                    PDF, JPG/JPEG, PNG — maksimal 5 MB
+                  </p>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                    onChange={
+                      handleFileChange
+                    }
+                    disabled={
+                      submitting ||
+                      kuotaHabis
+                    }
+                    className="hidden"
+                  />
+                </label>
+              ) : (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-lg bg-brand-blue-light text-brand-blue flex items-center justify-center shrink-0">
+                        <FileText size={19} />
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-gray-800 truncate">
+                          {lampiran.name}
+                        </p>
+
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {formatFileSize(
+                            lampiran.size
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={
+                        removeFile
+                      }
+                      disabled={
+                        submitting
+                      }
+                      className="w-9 h-9 rounded-lg flex items-center justify-center text-gray-500 hover:bg-red-50 hover:text-red-600 transition disabled:opacity-50"
+                      aria-label="Hapus lampiran"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* SUBMIT */}
             <button
               type="submit"
-              disabled={isLimitReached}
-              className={`w-full h-12 rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition ${
-                isLimitReached
-                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                  : "bg-brand-blue text-white hover:bg-brand-blue-dark"
-              }`}
+              disabled={
+                submitting ||
+                kuotaHabis
+              }
+              className="w-full h-12 rounded-xl bg-brand-blue text-white text-sm font-bold hover:bg-brand-blue-dark transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              <Send size={18} />
+              {submitting ? (
+                <>
+                  <Loader2
+                    size={19}
+                    className="animate-spin"
+                  />
 
-              {isLimitReached
-                ? "Kuota Izin Habis"
-                : "Kirim Izin"}
+                  Mencatat izin...
+                </>
+              ) : kuotaHabis ? (
+                "Kuota Izin Bulan Ini Habis"
+              ) : (
+                <>
+                  <CheckCircle2 size={19} />
+
+                  Catat Izin
+                </>
+              )}
             </button>
+
+            <p className="text-center text-xs text-gray-400 mt-3">
+              Sisa kuota bulan ini:{" "}
+              <span className="font-bold text-gray-600">
+                {sisaKuota}
+              </span>{" "}
+              dari{" "}
+              {MAX_IZIN_PER_MONTH}
+            </p>
           </form>
         </div>
 
-        {/* Summary */}
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-sm text-gray-500">
-              Digunakan
-            </p>
+        {/* RIWAYAT TERBARU */}
+        <div className="mt-6 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-5 sm:p-6 border-b border-gray-100">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Riwayat Izin Bulan Ini
+                </h2>
 
-            <p className="text-2xl font-bold text-gray-900 mt-2">
-              {totalIzinBulanIni}
-            </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Semua izin yang sudah dicatat langsung tampil di sini.
+                </p>
+              </div>
 
-            <p className="text-xs text-gray-400 mt-2">
-              Izin bulan ini
-            </p>
+              <span className="px-3 py-1.5 rounded-lg bg-brand-blue-light text-brand-blue text-xs font-bold">
+                {totalIzinBulanIni}/
+                {MAX_IZIN_PER_MONTH}
+              </span>
+            </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-sm text-gray-500">
-              Sisa
-            </p>
+          <div className="p-5 sm:p-6">
+            {loading ? (
+              <div className="py-10 text-center">
+                <Loader2
+                  size={28}
+                  className="animate-spin text-brand-blue mx-auto"
+                />
 
-            <p className="text-2xl font-bold text-brand-blue mt-2">
-              {sisaIzin}
-            </p>
+                <p className="text-sm font-semibold text-gray-700 mt-3">
+                  Memuat riwayat...
+                </p>
+              </div>
+            ) : izinBulanIni.length ===
+              0 ? (
+              <div className="py-10 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto">
+                  <FileText size={25} />
+                </div>
 
-            <p className="text-xs text-gray-400 mt-2">
-              Izin tersedia
-            </p>
-          </div>
+                <p className="font-bold text-gray-800 mt-4">
+                  Belum ada izin
+                </p>
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-sm text-gray-500">
-              Maksimal
-            </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Belum ada izin yang tercatat bulan ini.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {izinBulanIni.map(
+                  (item) => {
+                    const hasRange =
+                      item.date &&
+                      item.endDate &&
+                      item.date !==
+                        item.endDate;
 
-            <p className="text-2xl font-bold text-gray-900 mt-2">
-              {MAX_IZIN_PER_MONTH}x
-            </p>
+                    return (
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-gray-100 bg-gray-50 p-4"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-brand-blue-light text-brand-blue flex items-center justify-center shrink-0">
+                            <FileText size={18} />
+                          </div>
 
-            <p className="text-xs text-gray-400 mt-2">
-              Setiap bulan
-            </p>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                              <div>
+                                <p className="font-bold text-gray-900">
+                                  {item.type}
+                                </p>
+
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {formatDate(
+                                    item.date
+                                  )}
+
+                                  {hasRange &&
+                                    ` — ${formatDate(
+                                      item.endDate
+                                    )}`}
+                                </p>
+                              </div>
+
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 text-green-700 text-xs font-bold self-start">
+                                <CheckCircle2
+                                  size={13}
+                                />
+
+                                Tercatat
+                              </span>
+                            </div>
+
+                            <div className="mt-3 rounded-lg bg-white border border-gray-100 p-3">
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                                Alasan
+                              </p>
+
+                              <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">
+                                {item.reason}
+                              </p>
+                            </div>
+
+                            <p className="text-xs text-gray-400 mt-3">
+                              Dicatat{" "}
+                              {formatDateTime(
+                                item.createdAt
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

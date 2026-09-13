@@ -1,216 +1,530 @@
-import { useMemo, useState } from "react";
 import {
-  Search,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  Eye,
   Plus,
+  Search,
+  RefreshCw,
   Users,
   UserCheck,
   UserX,
-  GraduationCap,
-  MoreVertical,
-  Eye,
-  Pencil,
-  Trash2,
   X,
-  Phone,
+  Mail,
   School,
-  Hash,
   BookOpen,
-  Filter,
+  Hash,
+  Phone,
+  UserRound,
+  Lock,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  GraduationCap,
 } from "lucide-react";
 
-/*
- * DATA DUMMY
- *
- * Nanti data ini diganti dengan response dari backend/API.
- */
-const initialStudents = [
-  {
-    id: 1,
-    name: "Andi Setiawan",
-    nisn: "1234567890",
-    major: "Rekayasa Perangkat Lunak",
-    className: "XII RPL 1",
-    school: "SMK Negeri 1 Jakarta",
-    phone: "081234567890",
-    gender: "Laki-laki",
-    status: "Aktif",
-  },
-  {
-    id: 2,
-    name: "Siti Rahma",
-    nisn: "1234567891",
-    major: "Rekayasa Perangkat Lunak",
-    className: "XII RPL 1",
-    school: "SMK Negeri 1 Jakarta",
-    phone: "081234567891",
-    gender: "Perempuan",
-    status: "Aktif",
-  },
-  {
-    id: 3,
-    name: "Budi Santoso",
-    nisn: "1234567892",
-    major: "Teknik Komputer dan Jaringan",
-    className: "XII TKJ 1",
-    school: "SMK Negeri 1 Jakarta",
-    phone: "081234567892",
-    gender: "Laki-laki",
-    status: "Aktif",
-  },
-  {
-    id: 4,
-    name: "Dina Permata",
-    nisn: "1234567893",
-    major: "Rekayasa Perangkat Lunak",
-    className: "XII RPL 2",
-    school: "SMK Negeri 1 Jakarta",
-    phone: "081234567893",
-    gender: "Perempuan",
-    status: "Aktif",
-  },
-  {
-    id: 5,
-    name: "Rizky Maulana",
-    nisn: "1234567894",
-    major: "Teknik Jaringan Komputer dan Telekomunikasi",
-    className: "XII TJKT 1",
-    school: "SMK Negeri 2 Jakarta",
-    phone: "081234567894",
-    gender: "Laki-laki",
-    status: "Aktif",
-  },
-  {
-    id: 6,
-    name: "Fajar Ramadhan",
-    nisn: "1234567895",
-    major: "Rekayasa Perangkat Lunak",
-    className: "XII RPL 2",
-    school: "SMK Negeri 1 Jakarta",
-    phone: "081234567895",
-    gender: "Laki-laki",
-    status: "Aktif",
-  },
-  {
-    id: 7,
-    name: "Nabila Putri",
-    nisn: "1234567896",
-    major: "Akuntansi",
-    className: "XII AKL 1",
-    school: "SMK Negeri 2 Jakarta",
-    phone: "081234567896",
-    gender: "Perempuan",
-    status: "Aktif",
-  },
-  {
-    id: 8,
-    name: "Dimas Saputra",
-    nisn: "1234567897",
-    major: "Rekayasa Perangkat Lunak",
-    className: "XI RPL 1",
-    school: "SMK Negeri 1 Jakarta",
-    phone: "081234567897",
-    gender: "Laki-laki",
-    status: "Nonaktif",
-  },
-  {
-    id: 9,
-    name: "Putri Amelia",
-    nisn: "1234567898",
-    major: "Akuntansi",
-    className: "XII AKL 1",
-    school: "SMK Negeri 2 Jakarta",
-    phone: "081234567898",
-    gender: "Perempuan",
-    status: "Aktif",
-  },
-  {
-    id: 10,
-    name: "Yoga Pratama",
-    nisn: "1234567899",
-    major: "Teknik Komputer dan Jaringan",
-    className: "XI TKJ 1",
-    school: "SMK Negeri 1 Jakarta",
-    phone: "081234567899",
-    gender: "Laki-laki",
-    status: "Aktif",
-  },
-  {
-    id: 11,
-    name: "Aulia Safitri",
-    nisn: "1234567800",
-    major: "Rekayasa Perangkat Lunak",
-    className: "XII RPL 1",
-    school: "SMK Negeri 1 Jakarta",
-    phone: "081234567800",
-    gender: "Perempuan",
-    status: "Aktif",
-  },
-  {
-    id: 12,
-    name: "Galang Prakoso",
-    nisn: "1234567801",
-    major: "Teknik Jaringan Komputer dan Telekomunikasi",
-    className: "XII TJKT 1",
-    school: "SMK Negeri 2 Jakarta",
-    phone: "081234567801",
-    gender: "Laki-laki",
-    status: "Aktif",
-  },
-];
+import {
+  getAdminStudents,
+  createAdminStudent,
+} from "../../services/api";
 
-const ITEMS_PER_PAGE = 8;
+function getResponseData(response) {
+  if (!response) return [];
+
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if (Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  if (Array.isArray(response.students)) {
+    return response.students;
+  }
+
+  if (Array.isArray(response.users)) {
+    return response.users;
+  }
+
+  if (Array.isArray(response.items)) {
+    return response.items;
+  }
+
+  if (Array.isArray(response.records)) {
+    return response.records;
+  }
+
+  if (
+    response.data &&
+    typeof response.data === "object"
+  ) {
+    if (Array.isArray(response.data.students)) {
+      return response.data.students;
+    }
+
+    if (Array.isArray(response.data.users)) {
+      return response.data.users;
+    }
+
+    if (Array.isArray(response.data.items)) {
+      return response.data.items;
+    }
+
+    if (Array.isArray(response.data.records)) {
+      return response.data.records;
+    }
+  }
+
+  return [];
+}
+
+function normalizeStudent(student, index) {
+  const raw = student || {};
+
+  return {
+    id:
+      raw.id ??
+      raw.user_id ??
+      raw.student_id ??
+      raw.uuid ??
+      `student-${index}`,
+
+    name:
+      raw.full_name ??
+      raw.name ??
+      raw.nama ??
+      "-",
+
+    email:
+      raw.email ??
+      "-",
+
+    nisn:
+      raw.nisn ??
+      raw.NISN ??
+      "-",
+
+    school:
+      raw.school ??
+      raw.sekolah ??
+      "-",
+
+    major:
+      raw.major ??
+      raw.jurusan ??
+      "-",
+
+    phone:
+      raw.phone ??
+      raw.phone_number ??
+      raw.no_hp ??
+      raw.nomor_telepon ??
+      raw.telephone ??
+      "-",
+
+    className:
+      raw.class_name ??
+      raw.className ??
+      raw.class ??
+      raw.kelas ??
+      "-",
+
+    gender:
+      raw.gender ??
+      raw.jenis_kelamin ??
+      raw.jenisKelamin ??
+      raw.sex ??
+      "-",
+
+    status:
+      raw.status ??
+      raw.account_status ??
+      "-",
+
+    role:
+      raw.role ??
+      "-",
+
+    createdAt:
+      raw.created_at ??
+      raw.createdAt ??
+      null,
+
+    raw,
+  };
+}
+
+function isActiveStatus(status) {
+  const value = String(status || "").toLowerCase();
+
+  return (
+    value === "active" ||
+    value === "aktif" ||
+    value === "1"
+  );
+}
+
+function isInactiveStatus(status) {
+  const value = String(status || "").toLowerCase();
+
+  return (
+    value === "inactive" ||
+    value === "nonaktif" ||
+    value === "non-active" ||
+    value === "0"
+  );
+}
+
+function formatStatus(status) {
+  if (!status || status === "-") {
+    return "Tidak tersedia";
+  }
+
+  if (isActiveStatus(status)) {
+    return "Aktif";
+  }
+
+  if (isInactiveStatus(status)) {
+    return "Nonaktif";
+  }
+
+  return String(status);
+}
+
+function getInitials(name) {
+  if (!name || name === "-") {
+    return "?";
+  }
+
+  const words = String(name)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (words.length === 1) {
+    return words[0]
+      .slice(0, 2)
+      .toUpperCase();
+  }
+
+  return `${words[0][0]}${words[1][0]}`
+    .toUpperCase();
+}
+
+function formatDate(date) {
+  if (!date) return "-";
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return String(date);
+  }
+
+  return parsed.toLocaleDateString(
+    "id-ID",
+    {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  description,
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-gray-500">
+            {title}
+          </p>
+
+          <p className="mt-2 text-2xl font-bold text-gray-900">
+            {value}
+          </p>
+
+          <p className="mt-1 text-xs text-gray-500">
+            {description}
+          </p>
+        </div>
+
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue-light text-brand-blue">
+          <Icon size={21} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  icon: Icon,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  required = false,
+  autoComplete,
+}) {
+  return (
+    <div>
+      <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
+        {Icon && (
+          <Icon
+            size={15}
+            className="text-gray-400"
+          />
+        )}
+
+        {label}
+
+        {required && (
+          <span className="text-red-500">
+            *
+          </span>
+        )}
+      </label>
+
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        autoComplete={autoComplete}
+        className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-brand-blue focus:ring-4 focus:ring-brand-blue/10"
+      />
+    </div>
+  );
+}
+
+function DetailItem({
+  icon: Icon,
+  label,
+  value,
+}) {
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 p-3.5">
+      <div className="flex items-center gap-2 text-xs font-medium text-gray-400">
+        <Icon size={14} />
+
+        {label}
+      </div>
+
+      <p className="mt-1.5 break-words text-sm font-semibold text-gray-800">
+        {value || "-"}
+      </p>
+    </div>
+  );
+}
 
 export default function Students() {
   const [students, setStudents] =
-    useState(initialStudents);
+    useState([]);
 
-  const [search, setSearch] = useState("");
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [success, setSuccess] =
+    useState("");
+
+  const [search, setSearch] =
+    useState("");
+
   const [majorFilter, setMajorFilter] =
-    useState("Semua Jurusan");
+    useState("all");
+
   const [statusFilter, setStatusFilter] =
-    useState("Semua Status");
+    useState("all");
+
+  const [currentPage, setCurrentPage] =
+    useState(1);
 
   const [selectedStudent, setSelectedStudent] =
     useState(null);
 
-  const [showForm, setShowForm] = useState(false);
-  const [editingStudent, setEditingStudent] =
-    useState(null);
+  const [showAddModal, setShowAddModal] =
+    useState(false);
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const [submitting, setSubmitting] =
+    useState(false);
+
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    password: "",
+    nisn: "",
+    school: "",
+    major: "",
+    phone: "",
+    gender: "",
+    class_name: "",
+  });
+
+  const itemsPerPage = 8;
+
+  const loadStudents = useCallback(
+    async (showRefresh = false) => {
+      try {
+        if (showRefresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+
+        setError("");
+
+        const response =
+          await getAdminStudents();
+
+        const data =
+          getResponseData(response);
+
+        const normalized =
+          data.map(normalizeStudent);
+
+        setStudents(normalized);
+      } catch (err) {
+        console.error(
+          "Gagal mengambil data siswa:",
+          err
+        );
+
+        setError(
+          err?.message ||
+            "Gagal mengambil data siswa dari server."
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    loadStudents();
+  }, [loadStudents]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    search,
+    majorFilter,
+    statusFilter,
+  ]);
+
+  useEffect(() => {
+    if (!success) return;
+
+    const timer = setTimeout(() => {
+      setSuccess("");
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [success]);
 
   const majors = useMemo(() => {
-    return [
-      "Semua Jurusan",
-      ...new Set(students.map((student) => student.major)),
-    ];
+    const values = students
+      .map((student) => student.major)
+      .filter(
+        (value) =>
+          value &&
+          value !== "-" &&
+          String(value).trim() !== ""
+      );
+
+    return [...new Set(values)].sort(
+      (a, b) =>
+        String(a).localeCompare(
+          String(b),
+          "id"
+        )
+    );
+  }, [students]);
+
+  const availableStatuses = useMemo(() => {
+    const values = students
+      .map((student) => {
+        if (
+          isActiveStatus(student.status)
+        ) {
+          return "active";
+        }
+
+        if (
+          isInactiveStatus(student.status)
+        ) {
+          return "inactive";
+        }
+
+        return null;
+      })
+      .filter(Boolean);
+
+    return [...new Set(values)];
   }, [students]);
 
   const filteredStudents = useMemo(() => {
-    const keyword = search
-      .trim()
-      .toLowerCase();
+    const keyword =
+      search.trim().toLowerCase();
 
     return students.filter((student) => {
+      const searchable = [
+        student.name,
+        student.email,
+        student.nisn,
+        student.school,
+        student.major,
+        student.phone,
+        student.className,
+        student.gender,
+      ]
+        .map((value) =>
+          String(value || "").toLowerCase()
+        );
+
       const matchesSearch =
         !keyword ||
-        student.name
-          .toLowerCase()
-          .includes(keyword) ||
-        student.nisn
-          .toLowerCase()
-          .includes(keyword) ||
-        student.className
-          .toLowerCase()
-          .includes(keyword);
+        searchable.some((value) =>
+          value.includes(keyword)
+        );
 
       const matchesMajor =
-        majorFilter === "Semua Jurusan" ||
+        majorFilter === "all" ||
         student.major === majorFilter;
 
-      const matchesStatus =
-        statusFilter === "Semua Status" ||
-        student.status === statusFilter;
+      let matchesStatus = true;
+
+      if (statusFilter === "active") {
+        matchesStatus =
+          isActiveStatus(
+            student.status
+          );
+      }
+
+      if (statusFilter === "inactive") {
+        matchesStatus =
+          isInactiveStatus(
+            student.status
+          );
+      }
 
       return (
         matchesSearch &&
@@ -228,1369 +542,1194 @@ export default function Students() {
   const totalPages = Math.max(
     1,
     Math.ceil(
-      filteredStudents.length / ITEMS_PER_PAGE
+      filteredStudents.length /
+        itemsPerPage
     )
+  );
+
+  const safeCurrentPage = Math.min(
+    currentPage,
+    totalPages
   );
 
   const paginatedStudents =
     filteredStudents.slice(
-      (currentPage - 1) * ITEMS_PER_PAGE,
-      currentPage * ITEMS_PER_PAGE
+      (safeCurrentPage - 1) *
+        itemsPerPage,
+      safeCurrentPage *
+        itemsPerPage
     );
 
-  const totalStudents = students.length;
+  const stats = useMemo(() => {
+    const total = students.length;
 
-  const activeStudents = students.filter(
-    (student) => student.status === "Aktif"
-  ).length;
+    const active =
+      students.filter((student) =>
+        isActiveStatus(student.status)
+      ).length;
 
-  const inactiveStudents =
-    students.filter(
-      (student) => student.status === "Nonaktif"
-    ).length;
-
-  const femaleStudents =
-    students.filter(
-      (student) => student.gender === "Perempuan"
-    ).length;
-
-  const handleSearchChange = (value) => {
-    setSearch(value);
-    setCurrentPage(1);
-  };
-
-  const handleMajorChange = (value) => {
-    setMajorFilter(value);
-    setCurrentPage(1);
-  };
-
-  const handleStatusChange = (value) => {
-    setStatusFilter(value);
-    setCurrentPage(1);
-  };
-
-  const handleAddStudent = () => {
-    setEditingStudent(null);
-    setShowForm(true);
-  };
-
-  const handleEditStudent = (student) => {
-    setSelectedStudent(null);
-    setEditingStudent(student);
-    setShowForm(true);
-  };
-
-  const handleDeleteStudent = (student) => {
-    const confirmed = window.confirm(
-      `Hapus data siswa "${student.name}"?`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setStudents((current) =>
-      current.filter(
-        (item) => item.id !== student.id
-      )
-    );
-
-    setSelectedStudent(null);
-
-    if (
-      currentPage > 1 &&
-      paginatedStudents.length === 1
-    ) {
-      setCurrentPage((page) =>
-        Math.max(1, page - 1)
-      );
-    }
-  };
-
-  const handleSubmitStudent = (formData) => {
-    if (editingStudent) {
-      setStudents((current) =>
-        current.map((student) =>
-          student.id === editingStudent.id
-            ? {
-                ...student,
-                ...formData,
-              }
-            : student
+    const inactive =
+      students.filter((student) =>
+        isInactiveStatus(
+          student.status
         )
-      );
-    } else {
-      const newStudent = {
-        id: Date.now(),
-        ...formData,
-      };
+      ).length;
 
-      setStudents((current) => [
-        newStudent,
-        ...current,
-      ]);
+    const hasStatus =
+      students.some(
+        (student) =>
+          isActiveStatus(
+            student.status
+          ) ||
+          isInactiveStatus(
+            student.status
+          )
+      );
+
+    return {
+      total,
+      active: hasStatus ? active : null,
+      inactive: hasStatus
+        ? inactive
+        : null,
+    };
+  }, [students]);
+
+  const handleFormChange =
+    (field) => (event) => {
+      setForm((previous) => ({
+        ...previous,
+        [field]: event.target.value,
+      }));
+    };
+
+  const resetForm = () => {
+    setForm({
+      full_name: "",
+      email: "",
+      password: "",
+      nisn: "",
+      school: "",
+      major: "",
+      phone: "",
+      gender: "",
+      class_name: "",
+    });
+  };
+
+  const handleCloseAddModal = () => {
+    if (submitting) return;
+
+    setShowAddModal(false);
+    resetForm();
+  };
+
+  const handleAddStudent = async (
+    event
+  ) => {
+    event.preventDefault();
+
+    if (submitting) return;
+
+    try {
+      setSubmitting(true);
+      setError("");
+      setSuccess("");
+
+      /*
+       * api.js saat ini hanya mengirim:
+       * email, password, full_name,
+       * nisn, school, major
+       *
+       * Jadi field tambahan phone,
+       * gender, dan class_name tetap
+       * disiapkan di form dan bisa
+       * dibaca dari response backend.
+       *
+       * Jangan membuat data lokal/dummy.
+       */
+      const response =
+        await createAdminStudent({
+          email: form.email,
+          password: form.password,
+          full_name: form.full_name,
+          nisn: form.nisn,
+          school: form.school,
+          major: form.major,
+
+          /*
+           * Field tambahan ini disertakan
+           * sebagai informasi form.
+           *
+           * Jika backend create sudah
+           * mendukungnya, api.js perlu
+           * meneruskannya ke request.
+           */
+          phone: form.phone,
+          gender: form.gender,
+          class_name: form.class_name,
+        });
+
+      if (
+        response?.success === false
+      ) {
+        throw new Error(
+          response?.message ||
+            "Gagal menambahkan siswa."
+        );
+      }
+
+      await loadStudents(true);
+
+      setShowAddModal(false);
+      resetForm();
+
+      setSuccess(
+        "Siswa berhasil ditambahkan."
+      );
 
       setCurrentPage(1);
-    }
+    } catch (err) {
+      console.error(
+        "Gagal menambahkan siswa:",
+        err
+      );
 
-    setShowForm(false);
-    setEditingStudent(null);
+      setError(
+        err?.message ||
+          "Gagal menambahkan siswa."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {/* HEADER */}
-        <div className="mb-6">
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
-            <div>
-              <div className="flex items-center gap-2 text-brand-blue mb-2">
-                <Users size={19} />
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+              Data Siswa
+            </h1>
 
-                <span className="text-sm font-semibold">
-                  Manajemen Siswa
-                </span>
-              </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Kelola data peserta PKL
+              yang tersimpan di
+              database.
+            </p>
+          </div>
 
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                Data Siswa
-              </h1>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() =>
+                loadStudents(true)
+              }
+              disabled={
+                loading || refreshing
+              }
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw
+                size={17}
+                className={
+                  refreshing
+                    ? "animate-spin"
+                    : ""
+                }
+              />
 
-              <p className="text-sm text-gray-500 mt-2">
-                Kelola data siswa yang mengikuti
-                program PKL.
-              </p>
-            </div>
+              Refresh
+            </button>
 
             <button
               type="button"
-              onClick={handleAddStudent}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-brand-blue text-white text-sm font-bold shadow-sm hover:bg-brand-blue-dark transition"
+              onClick={() =>
+                setShowAddModal(true)
+              }
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-blue-dark"
             >
               <Plus size={18} />
+
               Tambah Siswa
             </button>
           </div>
         </div>
 
-        {/* STATISTICS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        {/* ERROR */}
+        {error && (
+          <div className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <AlertCircle
+              size={19}
+              className="mt-0.5 shrink-0"
+            />
+
+            <div className="flex-1">
+              <p className="font-semibold">
+                Terjadi kesalahan
+              </p>
+
+              <p className="mt-0.5">
+                {error}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setError("")
+              }
+              className="rounded-lg p-1 hover:bg-red-100"
+            >
+              <X size={17} />
+            </button>
+          </div>
+        )}
+
+        {/* SUCCESS */}
+        {success && (
+          <div className="mb-5 flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            <CheckCircle2
+              size={19}
+              className="mt-0.5 shrink-0"
+            />
+
+            <div className="flex-1">
+              <p className="font-semibold">
+                Berhasil
+              </p>
+
+              <p className="mt-0.5">
+                {success}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setSuccess("")
+              }
+              className="rounded-lg p-1 hover:bg-green-100"
+            >
+              <X size={17} />
+            </button>
+          </div>
+        )}
+
+        {/* STATS */}
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard
-            label="Total Siswa"
-            value={totalStudents}
-            description="Siswa terdaftar"
+            title="Total Siswa"
+            value={
+              loading
+                ? "..."
+                : stats.total
+            }
             icon={Users}
-            iconClass="bg-brand-blue-light text-brand-blue"
-            valueClass="text-gray-900"
+            description="Data dari database"
           />
 
           <StatCard
-            label="Siswa Aktif"
-            value={activeStudents}
-            description="Sedang mengikuti PKL"
+            title="Siswa Aktif"
+            value={
+              loading
+                ? "..."
+                : stats.active === null
+                ? "—"
+                : stats.active
+            }
             icon={UserCheck}
-            iconClass="bg-green-50 text-green-600"
-            valueClass="text-green-600"
+            description={
+              stats.active === null
+                ? "Status belum tersedia"
+                : "Status aktif"
+            }
           />
 
           <StatCard
-            label="Siswa Nonaktif"
-            value={inactiveStudents}
-            description="Tidak aktif"
+            title="Siswa Nonaktif"
+            value={
+              loading
+                ? "..."
+                : stats.inactive === null
+                ? "—"
+                : stats.inactive
+            }
             icon={UserX}
-            iconClass="bg-red-50 text-red-600"
-            valueClass="text-red-600"
-          />
-
-          <StatCard
-            label="Siswa Perempuan"
-            value={femaleStudents}
-            description="Dari seluruh siswa"
-            icon={GraduationCap}
-            iconClass="bg-purple-50 text-purple-600"
-            valueClass="text-purple-600"
+            description={
+              stats.inactive === null
+                ? "Status belum tersedia"
+                : "Status nonaktif"
+            }
           />
         </div>
 
-        {/* TABLE CARD */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* FILTER BAR */}
-          <div className="p-5 sm:p-6 border-b border-gray-100">
-            <div className="flex flex-col xl:flex-row xl:items-center gap-4">
-              {/* SEARCH */}
-              <div className="relative flex-1">
-                <Search
-                  size={19}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                />
+        {/* FILTER */}
+        <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_220px_180px]">
+            <div className="relative">
+              <Search
+                size={18}
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+              />
 
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(event) =>
-                    handleSearchChange(
-                      event.target.value
-                    )
-                  }
-                  placeholder="Cari nama, NISN, atau kelas..."
-                  className="w-full h-12 pl-11 pr-4 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition"
-                />
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3">
-                {/* MAJOR */}
-                <div className="relative">
-                  <BookOpen
-                    size={17}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                  />
-
-                  <select
-                    value={majorFilter}
-                    onChange={(event) =>
-                      handleMajorChange(
-                        event.target.value
-                      )
-                    }
-                    className="h-12 w-full sm:w-[230px] appearance-none pl-10 pr-9 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition"
-                  >
-                    {majors.map((major) => (
-                      <option
-                        key={major}
-                        value={major}
-                      >
-                        {major}
-                      </option>
-                    ))}
-                  </select>
-
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                    ▾
-                  </span>
-                </div>
-
-                {/* STATUS */}
-                <div className="relative">
-                  <Filter
-                    size={17}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                  />
-
-                  <select
-                    value={statusFilter}
-                    onChange={(event) =>
-                      handleStatusChange(
-                        event.target.value
-                      )
-                    }
-                    className="h-12 w-full sm:w-[170px] appearance-none pl-10 pr-9 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition"
-                  >
-                    <option value="Semua Status">
-                      Semua Status
-                    </option>
-
-                    <option value="Aktif">
-                      Aktif
-                    </option>
-
-                    <option value="Nonaktif">
-                      Nonaktif
-                    </option>
-                  </select>
-
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                    ▾
-                  </span>
-                </div>
-              </div>
+              <input
+                type="text"
+                value={search}
+                onChange={(event) =>
+                  setSearch(
+                    event.target.value
+                  )
+                }
+                placeholder="Cari nama, email, NISN, sekolah, jurusan..."
+                className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm outline-none transition focus:border-brand-blue focus:bg-white focus:ring-4 focus:ring-brand-blue/10"
+              />
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-4">
-              <p className="text-sm text-gray-500">
-                Menampilkan{" "}
-                <span className="font-bold text-gray-700">
-                  {filteredStudents.length}
-                </span>{" "}
-                dari{" "}
-                <span className="font-bold text-gray-700">
-                  {students.length}
-                </span>{" "}
-                siswa
+            <select
+              value={majorFilter}
+              onChange={(event) =>
+                setMajorFilter(
+                  event.target.value
+                )
+              }
+              className="h-11 rounded-xl border border-gray-200 bg-gray-50 px-3.5 text-sm text-gray-700 outline-none focus:border-brand-blue focus:bg-white focus:ring-4 focus:ring-brand-blue/10"
+            >
+              <option value="all">
+                Semua Jurusan
+              </option>
+
+              {majors.map((major) => (
+                <option
+                  key={String(major)}
+                  value={major}
+                >
+                  {major}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(
+                  event.target.value
+                )
+              }
+              disabled={
+                availableStatuses.length ===
+                0
+              }
+              className="h-11 rounded-xl border border-gray-200 bg-gray-50 px-3.5 text-sm text-gray-700 outline-none focus:border-brand-blue focus:bg-white focus:ring-4 focus:ring-brand-blue/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value="all">
+                Semua Status
+              </option>
+
+              {availableStatuses.includes(
+                "active"
+              ) && (
+                <option value="active">
+                  Aktif
+                </option>
+              )}
+
+              {availableStatuses.includes(
+                "inactive"
+              ) && (
+                <option value="inactive">
+                  Nonaktif
+                </option>
+              )}
+            </select>
+          </div>
+
+          <div className="mt-3 flex justify-between text-xs text-gray-500">
+            <span>
+              Menampilkan{" "}
+              <strong className="text-gray-700">
+                {filteredStudents.length}
+              </strong>{" "}
+              siswa
+            </span>
+
+            <span>
+              Halaman{" "}
+              <strong className="text-gray-700">
+                {safeCurrentPage}
+              </strong>{" "}
+              /{" "}
+              <strong className="text-gray-700">
+                {totalPages}
+              </strong>
+            </span>
+          </div>
+        </div>
+
+        {/* TABLE */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          {loading ? (
+            <div className="flex min-h-[360px] flex-col items-center justify-center">
+              <Loader2
+                size={32}
+                className="animate-spin text-brand-blue"
+              />
+
+              <p className="mt-4 text-sm font-semibold text-gray-700">
+                Mengambil data siswa...
               </p>
 
-              {(search ||
-                majorFilter !==
-                  "Semua Jurusan" ||
-                statusFilter !==
-                  "Semua Status") && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearch("");
-                    setMajorFilter(
-                      "Semua Jurusan"
-                    );
-                    setStatusFilter(
-                      "Semua Status"
-                    );
-                    setCurrentPage(1);
-                  }}
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-blue hover:text-brand-blue-dark transition self-start sm:self-auto"
-                >
-                  <X size={15} />
-                  Reset filter
-                </button>
-              )}
+              <p className="mt-1 text-xs text-gray-500">
+                Menghubungkan ke backend.
+              </p>
             </div>
-          </div>
+          ) : paginatedStudents.length ===
+            0 ? (
+            <div className="flex min-h-[360px] flex-col items-center justify-center px-6 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 text-gray-400">
+                <Users size={30} />
+              </div>
 
-          {/* DESKTOP TABLE */}
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-100">
-                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wide">
-                    Siswa
-                  </th>
+              <h3 className="mt-4 text-base font-bold text-gray-900">
+                Tidak ada data siswa
+              </h3>
 
-                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wide">
-                    NISN
-                  </th>
+              <p className="mt-1 text-sm text-gray-500">
+                Tidak ada data yang
+                sesuai dengan
+                pencarian atau filter.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* DESKTOP */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-gray-500">
+                        Siswa
+                      </th>
 
-                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wide">
-                    Jurusan
-                  </th>
+                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-gray-500">
+                        NISN
+                      </th>
 
-                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wide">
-                    Kelas
-                  </th>
+                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-gray-500">
+                        Sekolah
+                      </th>
 
-                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wide">
-                    No. Telepon
-                  </th>
+                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-gray-500">
+                        Jurusan
+                      </th>
 
-                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wide">
-                    Status
-                  </th>
+                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-gray-500">
+                        Kelas
+                      </th>
 
-                  <th className="text-right px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wide">
-                    Aksi
-                  </th>
-                </tr>
-              </thead>
+                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-gray-500">
+                        Status
+                      </th>
 
-              <tbody className="divide-y divide-gray-100">
-                {paginatedStudents.length > 0 ? (
-                  paginatedStudents.map(
-                    (student) => (
-                      <StudentRow
-                        key={student.id}
-                        student={student}
-                        onView={() =>
-                          setSelectedStudent(
-                            student
-                          )
-                        }
-                        onEdit={() =>
-                          handleEditStudent(
-                            student
-                          )
-                        }
-                        onDelete={() =>
-                          handleDeleteStudent(
-                            student
-                          )
-                        }
-                      />
-                    )
+                      <th className="px-5 py-4 text-right text-xs font-bold uppercase tracking-wide text-gray-500">
+                        Detail
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-gray-100">
+                    {paginatedStudents.map(
+                      (student) => (
+                        <tr
+                          key={String(
+                            student.id
+                          )}
+                          className="transition hover:bg-gray-50"
+                        >
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue text-xs font-bold text-white">
+                                {getInitials(
+                                  student.name
+                                )}
+                              </div>
+
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-gray-900">
+                                  {
+                                    student.name
+                                  }
+                                </p>
+
+                                <p className="mt-0.5 max-w-[220px] truncate text-xs text-gray-500">
+                                  {
+                                    student.email
+                                  }
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4 text-sm text-gray-700">
+                            {student.nisn}
+                          </td>
+
+                          <td className="px-5 py-4 text-sm text-gray-700">
+                            {student.school}
+                          </td>
+
+                          <td className="px-5 py-4 text-sm text-gray-700">
+                            {student.major}
+                          </td>
+
+                          <td className="px-5 py-4 text-sm text-gray-700">
+                            {student.className}
+                          </td>
+
+                          <td className="px-5 py-4">
+                            {isActiveStatus(
+                              student.status
+                            ) ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700">
+                                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                                Aktif
+                              </span>
+                            ) : isInactiveStatus(
+                                student.status
+                              ) ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                                Nonaktif
+                              </span>
+                            ) : (
+                              <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
+                                Tidak tersedia
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="px-5 py-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedStudent(
+                                  student
+                                )
+                              }
+                              className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-700 hover:border-brand-blue hover:text-brand-blue"
+                            >
+                              <Eye size={15} />
+
+                              Detail
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* MOBILE */}
+              <div className="divide-y divide-gray-100 md:hidden">
+                {paginatedStudents.map(
+                  (student) => (
+                    <div
+                      key={String(
+                        student.id
+                      )}
+                      className="p-4"
+                    >
+                      <div className="flex gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue text-xs font-bold text-white">
+                          {getInitials(
+                            student.name
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold text-gray-900">
+                            {
+                              student.name
+                            }
+                          </p>
+
+                          <p className="mt-0.5 truncate text-xs text-gray-500">
+                            {
+                              student.email
+                            }
+                          </p>
+
+                          <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <span className="text-gray-400">
+                                NISN
+                              </span>
+
+                              <p className="mt-0.5 font-semibold text-gray-700">
+                                {
+                                  student.nisn
+                                }
+                              </p>
+                            </div>
+
+                            <div>
+                              <span className="text-gray-400">
+                                Kelas
+                              </span>
+
+                              <p className="mt-0.5 font-semibold text-gray-700">
+                                {
+                                  student.className
+                                }
+                              </p>
+                            </div>
+
+                            <div>
+                              <span className="text-gray-400">
+                                Jurusan
+                              </span>
+
+                              <p className="mt-0.5 font-semibold text-gray-700">
+                                {
+                                  student.major
+                                }
+                              </p>
+                            </div>
+
+                            <div>
+                              <span className="text-gray-400">
+                                Jenis Kelamin
+                              </span>
+
+                              <p className="mt-0.5 font-semibold text-gray-700">
+                                {
+                                  student.gender
+                                }
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedStudent(
+                                student
+                              )
+                            }
+                            className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:border-brand-blue hover:text-brand-blue"
+                          >
+                            <Eye size={15} />
+
+                            Lihat Detail
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   )
-                ) : (
-                  <EmptyState />
                 )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* MOBILE / TABLET CARDS */}
-          <div className="lg:hidden divide-y divide-gray-100">
-            {paginatedStudents.length > 0 ? (
-              paginatedStudents.map(
-                (student) => (
-                  <StudentMobileCard
-                    key={student.id}
-                    student={student}
-                    onView={() =>
-                      setSelectedStudent(
-                        student
-                      )
-                    }
-                    onEdit={() =>
-                      handleEditStudent(
-                        student
-                      )
-                    }
-                    onDelete={() =>
-                      handleDeleteStudent(
-                        student
-                      )
-                    }
-                  />
-                )
-              )
-            ) : (
-              <EmptyState />
-            )}
-          </div>
+              </div>
+            </>
+          )}
 
           {/* PAGINATION */}
-          {filteredStudents.length > 0 && (
-            <div className="px-5 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <p className="text-xs sm:text-sm text-gray-500">
-                Halaman{" "}
-                <span className="font-bold text-gray-700">
-                  {currentPage}
-                </span>{" "}
-                dari{" "}
-                <span className="font-bold text-gray-700">
-                  {totalPages}
-                </span>
-              </p>
+          {!loading &&
+            filteredStudents.length >
+              0 && (
+              <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <p className="text-xs text-gray-500">
+                  Menampilkan{" "}
+                  <strong className="text-gray-700">
+                    {(safeCurrentPage - 1) *
+                      itemsPerPage +
+                      1}
+                  </strong>{" "}
+                  -{" "}
+                  <strong className="text-gray-700">
+                    {Math.min(
+                      safeCurrentPage *
+                        itemsPerPage,
+                      filteredStudents.length
+                    )}
+                  </strong>{" "}
+                  dari{" "}
+                  <strong className="text-gray-700">
+                    {filteredStudents.length}
+                  </strong>
+                </p>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={currentPage === 1}
-                  onClick={() =>
-                    setCurrentPage(
-                      (page) =>
-                        Math.max(1, page - 1)
-                    )
-                  }
-                  className="px-3.5 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                >
-                  Sebelumnya
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={
+                      safeCurrentPage <= 1
+                    }
+                    onClick={() =>
+                      setCurrentPage(
+                        (page) =>
+                          Math.max(
+                            1,
+                            page - 1
+                          )
+                      )
+                    }
+                    className="h-9 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-700 disabled:opacity-40"
+                  >
+                    Sebelumnya
+                  </button>
 
-                <div className="hidden sm:flex items-center gap-1">
-                  {Array.from(
-                    { length: totalPages },
-                    (_, index) => index + 1
-                  ).map((page) => (
-                    <button
-                      key={page}
-                      type="button"
-                      onClick={() =>
-                        setCurrentPage(page)
-                      }
-                      className={`w-9 h-9 rounded-lg text-sm font-bold transition ${
-                        currentPage === page
-                          ? "bg-brand-blue text-white"
-                          : "text-gray-600 hover:bg-gray-100"
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
+                  <div className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-brand-blue px-3 text-xs font-bold text-white">
+                    {safeCurrentPage}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={
+                      safeCurrentPage >=
+                      totalPages
+                    }
+                    onClick={() =>
+                      setCurrentPage(
+                        (page) =>
+                          Math.min(
+                            totalPages,
+                            page + 1
+                          )
+                      )
+                    }
+                    className="h-9 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-700 disabled:opacity-40"
+                  >
+                    Berikutnya
+                  </button>
                 </div>
-
-                <button
-                  type="button"
-                  disabled={
-                    currentPage === totalPages
-                  }
-                  onClick={() =>
-                    setCurrentPage(
-                      (page) =>
-                        Math.min(
-                          totalPages,
-                          page + 1
-                        )
-                    )
-                  }
-                  className="px-3.5 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                >
-                  Berikutnya
-                </button>
               </div>
-            </div>
-          )}
+            )}
         </div>
 
         {/* INFO */}
-        <div className="mt-6 flex gap-3 p-4 rounded-2xl bg-brand-blue-light border border-brand-blue/10">
-          <Users
-            size={19}
-            className="text-brand-blue shrink-0 mt-0.5"
-          />
-
-          <p className="text-sm text-brand-blue leading-relaxed">
-            Data siswa saat ini masih menggunakan
-            data dummy untuk frontend. Setelah backend
-            tersedia, data akan diambil dan dikelola
-            langsung melalui database.
+        <div className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
+          <p className="text-xs leading-relaxed text-yellow-800">
+            <strong>Catatan:</strong>{" "}
+            data siswa pada halaman ini
+            berasal dari backend. Tidak ada
+            data siswa dummy/local.
           </p>
         </div>
       </div>
+
+      {/* ADD MODAL */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div
+            className="absolute inset-0"
+            onClick={
+              handleCloseAddModal
+            }
+          />
+
+          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Tambah Siswa
+                </h2>
+
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Lengkapi data siswa.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  handleCloseAddModal
+                }
+                disabled={submitting}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleAddStudent}
+              className="p-5"
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Field
+                    label="Nama Lengkap"
+                    icon={UserRound}
+                    value={
+                      form.full_name
+                    }
+                    onChange={handleFormChange(
+                      "full_name"
+                    )}
+                    placeholder="Masukkan nama lengkap"
+                    required
+                    autoComplete="name"
+                  />
+                </div>
+
+                <Field
+                  label="Email"
+                  icon={Mail}
+                  type="email"
+                  value={form.email}
+                  onChange={handleFormChange(
+                    "email"
+                  )}
+                  placeholder="contoh@email.com"
+                  required
+                  autoComplete="email"
+                />
+
+                <Field
+                  label="Password"
+                  icon={Lock}
+                  type="password"
+                  value={
+                    form.password
+                  }
+                  onChange={handleFormChange(
+                    "password"
+                  )}
+                  placeholder="Password akun siswa"
+                  required
+                  autoComplete="new-password"
+                />
+
+                <Field
+                  label="NISN"
+                  icon={Hash}
+                  value={form.nisn}
+                  onChange={handleFormChange(
+                    "nisn"
+                  )}
+                  placeholder="Masukkan NISN"
+                  required
+                />
+
+                <Field
+                  label="No. Telepon"
+                  icon={Phone}
+                  value={form.phone}
+                  onChange={handleFormChange(
+                    "phone"
+                  )}
+                  placeholder="08xxxxxxxxxx"
+                />
+
+                <Field
+                  label="Sekolah"
+                  icon={School}
+                  value={
+                    form.school
+                  }
+                  onChange={handleFormChange(
+                    "school"
+                  )}
+                  placeholder="Nama sekolah"
+                  required
+                />
+
+                <Field
+                  label="Kelas"
+                  icon={GraduationCap}
+                  value={
+                    form.class_name
+                  }
+                  onChange={handleFormChange(
+                    "class_name"
+                  )}
+                  placeholder="Contoh: XII RPL 1"
+                />
+
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <UserRound
+                      size={15}
+                      className="text-gray-400"
+                    />
+
+                    Jenis Kelamin
+                  </label>
+
+                  <select
+                    value={form.gender}
+                    onChange={handleFormChange(
+                      "gender"
+                    )}
+                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3.5 text-sm text-gray-700 outline-none focus:border-brand-blue focus:ring-4 focus:ring-brand-blue/10"
+                  >
+                    <option value="">
+                      Pilih jenis kelamin
+                    </option>
+
+                    <option value="Laki-laki">
+                      Laki-laki
+                    </option>
+
+                    <option value="Perempuan">
+                      Perempuan
+                    </option>
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <Field
+                    label="Jurusan"
+                    icon={BookOpen}
+                    value={
+                      form.major
+                    }
+                    onChange={handleFormChange(
+                      "major"
+                    )}
+                    placeholder="Contoh: Rekayasa Perangkat Lunak"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-xl border border-blue-100 bg-brand-blue-light px-4 py-3">
+                <p className="text-xs leading-relaxed text-brand-blue-dark">
+                  Data yang sudah tersedia
+                  dari backend akan
+                  ditampilkan secara
+                  otomatis pada halaman
+                  detail siswa.
+                </p>
+              </div>
+
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={
+                    handleCloseAddModal
+                  }
+                  disabled={submitting}
+                  className="h-11 rounded-xl border border-gray-200 px-5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Batal
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-blue px-5 text-sm font-semibold text-white hover:bg-brand-blue-dark disabled:opacity-60"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2
+                        size={17}
+                        className="animate-spin"
+                      />
+
+                      Menyimpan...
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={17} />
+
+                      Simpan Siswa
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* DETAIL MODAL */}
       {selectedStudent && (
-        <StudentDetailModal
-          student={selectedStudent}
-          onClose={() =>
-            setSelectedStudent(null)
-          }
-          onEdit={() =>
-            handleEditStudent(
-              selectedStudent
-            )
-          }
-        />
-      )}
-
-      {/* FORM MODAL */}
-      {showForm && (
-        <StudentFormModal
-          student={editingStudent}
-          onClose={() => {
-            setShowForm(false);
-            setEditingStudent(null);
-          }}
-          onSubmit={handleSubmitStudent}
-        />
-      )}
-    </div>
-  );
-}
-
-/* =====================================================
-   STAT CARD
-===================================================== */
-
-function StatCard({
-  label,
-  value,
-  description,
-  icon: Icon,
-  iconClass,
-  valueClass,
-}) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-gray-500">
-            {label}
-          </p>
-
-          <p
-            className={`text-3xl font-bold mt-2 ${valueClass}`}
-          >
-            {value}
-          </p>
-
-          <p className="text-xs text-gray-400 mt-2">
-            {description}
-          </p>
-        </div>
-
-        <div
-          className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${iconClass}`}
-        >
-          <Icon size={21} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* =====================================================
-   DESKTOP ROW
-===================================================== */
-
-function StudentRow({
-  student,
-  onView,
-  onEdit,
-  onDelete,
-}) {
-  return (
-    <tr className="hover:bg-gray-50/70 transition">
-      <td className="px-6 py-4">
-        <div className="flex items-center gap-3">
-          <StudentAvatar
-            name={student.name}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div
+            className="absolute inset-0"
+            onClick={() =>
+              setSelectedStudent(
+                null
+              )
+            }
           />
 
-          <div className="min-w-0">
-            <p className="font-bold text-sm text-gray-900 truncate max-w-[210px]">
-              {student.name}
-            </p>
-
-            <p className="text-xs text-gray-400 mt-1">
-              {student.gender}
-            </p>
-          </div>
-        </div>
-      </td>
-
-      <td className="px-6 py-4">
-        <span className="text-sm font-semibold text-gray-700">
-          {student.nisn}
-        </span>
-      </td>
-
-      <td className="px-6 py-4">
-        <span className="text-sm text-gray-600">
-          {student.major}
-        </span>
-      </td>
-
-      <td className="px-6 py-4">
-        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-brand-blue-light text-brand-blue text-xs font-bold">
-          {student.className}
-        </span>
-      </td>
-
-      <td className="px-6 py-4">
-        <span className="text-sm text-gray-600">
-          {student.phone}
-        </span>
-      </td>
-
-      <td className="px-6 py-4">
-        <StatusBadge status={student.status} />
-      </td>
-
-      <td className="px-6 py-4">
-        <div className="flex items-center justify-end gap-1">
-          <ActionButton
-            icon={Eye}
-            label="Lihat detail"
-            onClick={onView}
-          />
-
-          <ActionButton
-            icon={Pencil}
-            label="Edit siswa"
-            onClick={onEdit}
-          />
-
-          <ActionButton
-            icon={Trash2}
-            label="Hapus siswa"
-            danger
-            onClick={onDelete}
-          />
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-/* =====================================================
-   MOBILE CARD
-===================================================== */
-
-function StudentMobileCard({
-  student,
-  onView,
-  onEdit,
-  onDelete,
-}) {
-  return (
-    <div className="p-5">
-      <div className="flex items-start gap-3">
-        <StudentAvatar
-          name={student.name}
-        />
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-bold text-sm text-gray-900 truncate">
-                {student.name}
-              </p>
-
-              <p className="text-xs text-gray-400 mt-1">
-                NISN {student.nisn}
-              </p>
-            </div>
-
-            <StatusBadge status={student.status} />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
-            <InfoItem
-              icon={BookOpen}
-              label="Jurusan"
-              value={student.major}
-            />
-
-            <InfoItem
-              icon={GraduationCap}
-              label="Kelas"
-              value={student.className}
-            />
-
-            <InfoItem
-              icon={Phone}
-              label="Telepon"
-              value={student.phone}
-            />
-
-            <InfoItem
-              icon={School}
-              label="Sekolah"
-              value={student.school}
-            />
-          </div>
-
-          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={onView}
-              className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-brand-blue-light text-brand-blue text-xs font-bold hover:bg-brand-blue/10 transition"
-            >
-              <Eye size={15} />
-              Detail
-            </button>
-
-            <button
-              type="button"
-              onClick={onEdit}
-              className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-xs font-bold hover:bg-gray-200 transition"
-            >
-              <Pencil size={15} />
-              Edit
-            </button>
-
-            <button
-              type="button"
-              onClick={onDelete}
-              className="w-11 h-10 inline-flex items-center justify-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition"
-              aria-label="Hapus siswa"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* =====================================================
-   AVATAR
-===================================================== */
-
-function StudentAvatar({ name }) {
-  const initials = name
-    .split(" ")
-    .slice(0, 2)
-    .map((item) => item.charAt(0))
-    .join("")
-    .toUpperCase();
-
-  return (
-    <div className="w-11 h-11 rounded-xl bg-brand-blue-light text-brand-blue flex items-center justify-center font-extrabold text-sm shrink-0">
-      {initials}
-    </div>
-  );
-}
-
-/* =====================================================
-   STATUS
-===================================================== */
-
-function StatusBadge({ status }) {
-  const isActive = status === "Aktif";
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${
-        isActive
-          ? "bg-green-50 text-green-700"
-          : "bg-gray-100 text-gray-500"
-      }`}
-    >
-      <span
-        className={`w-1.5 h-1.5 rounded-full ${
-          isActive
-            ? "bg-green-500"
-            : "bg-gray-400"
-        }`}
-      />
-
-      {status}
-    </span>
-  );
-}
-
-/* =====================================================
-   ACTION BUTTON
-===================================================== */
-
-function ActionButton({
-  icon: Icon,
-  label,
-  onClick,
-  danger = false,
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      className={`w-9 h-9 rounded-lg flex items-center justify-center transition ${
-        danger
-          ? "text-red-500 hover:bg-red-50"
-          : "text-gray-500 hover:bg-brand-blue-light hover:text-brand-blue"
-      }`}
-    >
-      <Icon size={17} />
-    </button>
-  );
-}
-
-/* =====================================================
-   INFO ITEM
-===================================================== */
-
-function InfoItem({
-  icon: Icon,
-  label,
-  value,
-}) {
-  return (
-    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gray-50">
-      <Icon
-        size={15}
-        className="text-brand-blue mt-0.5 shrink-0"
-      />
-
-      <div className="min-w-0">
-        <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wide">
-          {label}
-        </p>
-
-        <p className="text-xs font-semibold text-gray-700 mt-0.5 break-words">
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* =====================================================
-   EMPTY STATE
-===================================================== */
-
-function EmptyState() {
-  return (
-    <div className="py-16 px-6 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto">
-        <Users size={25} />
-      </div>
-
-      <h3 className="font-bold text-gray-800 mt-4">
-        Data siswa tidak ditemukan
-      </h3>
-
-      <p className="text-sm text-gray-400 mt-1">
-        Coba ubah kata pencarian atau filter.
-      </p>
-    </div>
-  );
-}
-
-/* =====================================================
-   DETAIL MODAL
-===================================================== */
-
-function StudentDetailModal({
-  student,
-  onClose,
-  onEdit,
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4"
-      onMouseDown={onClose}
-    >
-      <div
-        className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
-        onMouseDown={(event) =>
-          event.stopPropagation()
-        }
-      >
-        <div className="bg-brand-blue px-6 py-5 text-white">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-white text-brand-blue flex items-center justify-center font-extrabold">
-                {student.name
-                  .split(" ")
-                  .slice(0, 2)
-                  .map((item) =>
-                    item.charAt(0)
-                  )
-                  .join("")
-                  .toUpperCase()}
-              </div>
-
+          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
               <div>
-                <h2 className="font-bold text-lg">
+                <h2 className="text-lg font-bold text-gray-900">
                   Detail Siswa
                 </h2>
 
-                <p className="text-white/65 text-xs mt-1">
-                  Informasi lengkap siswa
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-9 h-9 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition"
-              aria-label="Tutup"
-            >
-              <X size={19} />
-            </button>
-          </div>
-        </div>
-
-        <div className="p-6">
-          <div className="mb-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">
-                  {student.name}
-                </h3>
-
-                <p className="text-sm text-gray-400 mt-1">
-                  NISN {student.nisn}
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Informasi dari database
                 </p>
               </div>
 
-              <StatusBadge
-                status={student.status}
-              />
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedStudent(
+                    null
+                  )
+                }
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5">
+              <div className="flex items-center gap-4 rounded-2xl bg-brand-blue-light p-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-blue text-sm font-bold text-white">
+                  {getInitials(
+                    selectedStudent.name
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  <h3 className="truncate text-base font-bold text-gray-900">
+                    {
+                      selectedStudent.name
+                    }
+                  </h3>
+
+                  <p className="mt-0.5 truncate text-sm text-gray-600">
+                    {
+                      selectedStudent.email
+                    }
+                  </p>
+
+                  <div className="mt-2">
+                    {isActiveStatus(
+                      selectedStudent.status
+                    ) ? (
+                      <span className="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-bold text-green-700">
+                        Aktif
+                      </span>
+                    ) : isInactiveStatus(
+                        selectedStudent.status
+                      ) ? (
+                      <span className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-700">
+                        Nonaktif
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
+                        Status tidak tersedia
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <DetailItem
+                  icon={Hash}
+                  label="NISN"
+                  value={
+                    selectedStudent.nisn
+                  }
+                />
+
+                <DetailItem
+                  icon={Mail}
+                  label="Email"
+                  value={
+                    selectedStudent.email
+                  }
+                />
+
+                <DetailItem
+                  icon={School}
+                  label="Sekolah"
+                  value={
+                    selectedStudent.school
+                  }
+                />
+
+                <DetailItem
+                  icon={BookOpen}
+                  label="Jurusan"
+                  value={
+                    selectedStudent.major
+                  }
+                />
+
+                <DetailItem
+                  icon={Phone}
+                  label="No. Telepon"
+                  value={
+                    selectedStudent.phone
+                  }
+                />
+
+                <DetailItem
+                  icon={UserRound}
+                  label="Jenis Kelamin"
+                  value={
+                    selectedStudent.gender
+                  }
+                />
+
+                <DetailItem
+                  icon={GraduationCap}
+                  label="Kelas"
+                  value={
+                    selectedStudent.className
+                  }
+                />
+
+                <DetailItem
+                  icon={UserCheck}
+                  label="Status"
+                  value={formatStatus(
+                    selectedStudent.status
+                  )}
+                />
+
+                <DetailItem
+                  icon={UserRound}
+                  label="Role"
+                  value={
+                    selectedStudent.role
+                  }
+                />
+
+                <DetailItem
+                  icon={Hash}
+                  label="ID"
+                  value={
+                    selectedStudent.id
+                  }
+                />
+
+                <DetailItem
+                  icon={Users}
+                  label="Terdaftar"
+                  value={formatDate(
+                    selectedStudent.createdAt
+                  )}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedStudent(
+                    null
+                  )
+                }
+                className="mt-6 h-11 w-full rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+              >
+                Tutup
+              </button>
             </div>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <DetailItem
-              icon={Hash}
-              label="NISN"
-              value={student.nisn}
-            />
-
-            <DetailItem
-              icon={GraduationCap}
-              label="Kelas"
-              value={student.className}
-            />
-
-            <DetailItem
-              icon={BookOpen}
-              label="Jurusan"
-              value={student.major}
-            />
-
-            <DetailItem
-              icon={School}
-              label="Sekolah"
-              value={student.school}
-            />
-
-            <DetailItem
-              icon={Phone}
-              label="No. Telepon"
-              value={student.phone}
-            />
-
-            <DetailItem
-              icon={Users}
-              label="Gender"
-              value={student.gender}
-            />
-          </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition"
-            >
-              Tutup
-            </button>
-
-            <button
-              type="button"
-              onClick={onEdit}
-              className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-brand-blue text-white text-sm font-bold hover:bg-brand-blue-dark transition"
-            >
-              <Pencil size={16} />
-              Edit Siswa
-            </button>
-          </div>
         </div>
-      </div>
+      )}
     </div>
-  );
-}
-
-/* =====================================================
-   DETAIL ITEM
-===================================================== */
-
-function DetailItem({
-  icon: Icon,
-  label,
-  value,
-}) {
-  return (
-    <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/70">
-      <div className="flex items-center gap-2 text-brand-blue">
-        <Icon size={15} />
-
-        <span className="text-[10px] font-bold uppercase tracking-wide">
-          {label}
-        </span>
-      </div>
-
-      <p className="text-sm font-semibold text-gray-800 mt-2 break-words">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-/* =====================================================
-   FORM MODAL
-===================================================== */
-
-function StudentFormModal({
-  student,
-  onClose,
-  onSubmit,
-}) {
-  const isEditing = Boolean(student);
-
-  const [formData, setFormData] =
-    useState({
-      name: student?.name || "",
-      nisn: student?.nisn || "",
-      major: student?.major || "",
-      className: student?.className || "",
-      school: student?.school || "",
-      phone: student?.phone || "",
-      gender:
-        student?.gender || "Laki-laki",
-      status: student?.status || "Aktif",
-    });
-
-  const [error, setError] =
-    useState("");
-
-  const handleChange = (
-    field,
-    value
-  ) => {
-    setFormData((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  };
-
-  const handleSubmit = (event) => {
-    event.preventDefault();
-
-    if (
-      !formData.name.trim() ||
-      !formData.nisn.trim() ||
-      !formData.major.trim() ||
-      !formData.className.trim() ||
-      !formData.school.trim() ||
-      !formData.phone.trim()
-    ) {
-      setError(
-        "Mohon lengkapi semua data siswa."
-      );
-
-      return;
-    }
-
-    setError("");
-
-    onSubmit({
-      ...formData,
-      name: formData.name.trim(),
-      nisn: formData.nisn.trim(),
-      major: formData.major.trim(),
-      className:
-        formData.className.trim(),
-      school: formData.school.trim(),
-      phone: formData.phone.trim(),
-    });
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 overflow-y-auto"
-      onMouseDown={onClose}
-    >
-      <div
-        className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden my-6"
-        onMouseDown={(event) =>
-          event.stopPropagation()
-        }
-      >
-        {/* HEADER */}
-        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">
-              {isEditing
-                ? "Edit Data Siswa"
-                : "Tambah Siswa"}
-            </h2>
-
-            <p className="text-sm text-gray-500 mt-1">
-              {isEditing
-                ? "Perbarui informasi siswa."
-                : "Tambahkan siswa baru ke sistem."}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-10 h-10 rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center transition"
-            aria-label="Tutup"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* FORM */}
-        <form
-          onSubmit={handleSubmit}
-          className="p-6"
-        >
-          {error && (
-            <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-100 text-sm font-semibold text-red-600">
-              {error}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField
-              label="Nama Lengkap"
-              value={formData.name}
-              onChange={(value) =>
-                handleChange(
-                  "name",
-                  value
-                )
-              }
-              placeholder="Masukkan nama lengkap"
-              required
-            />
-
-            <FormField
-              label="NISN"
-              value={formData.nisn}
-              onChange={(value) =>
-                handleChange(
-                  "nisn",
-                  value
-                )
-              }
-              placeholder="Masukkan NISN"
-              required
-            />
-
-            <FormField
-              label="Jurusan"
-              value={formData.major}
-              onChange={(value) =>
-                handleChange(
-                  "major",
-                  value
-                )
-              }
-              placeholder="Contoh: Rekayasa Perangkat Lunak"
-              required
-            />
-
-            <FormField
-              label="Kelas"
-              value={formData.className}
-              onChange={(value) =>
-                handleChange(
-                  "className",
-                  value
-                )
-              }
-              placeholder="Contoh: XII RPL 1"
-              required
-            />
-
-            <FormField
-              label="Sekolah"
-              value={formData.school}
-              onChange={(value) =>
-                handleChange(
-                  "school",
-                  value
-                )
-              }
-              placeholder="Nama sekolah"
-              required
-            />
-
-            <FormField
-              label="No. Telepon"
-              value={formData.phone}
-              onChange={(value) =>
-                handleChange(
-                  "phone",
-                  value
-                )
-              }
-              placeholder="08xxxxxxxxxx"
-              required
-            />
-
-            <SelectField
-              label="Gender"
-              value={formData.gender}
-              onChange={(value) =>
-                handleChange(
-                  "gender",
-                  value
-                )
-              }
-              options={[
-                "Laki-laki",
-                "Perempuan",
-              ]}
-            />
-
-            <SelectField
-              label="Status"
-              value={formData.status}
-              onChange={(value) =>
-                handleChange(
-                  "status",
-                  value
-                )
-              }
-              options={[
-                "Aktif",
-                "Nonaktif",
-              ]}
-            />
-          </div>
-
-          <div className="flex flex-col-reverse sm:flex-row gap-3 mt-7">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition"
-            >
-              Batal
-            </button>
-
-            <button
-              type="submit"
-              className="flex-1 py-3 rounded-xl bg-brand-blue text-white text-sm font-bold hover:bg-brand-blue-dark transition"
-            >
-              {isEditing
-                ? "Simpan Perubahan"
-                : "Tambah Siswa"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-/* =====================================================
-   FORM FIELD
-===================================================== */
-
-function FormField({
-  label,
-  value,
-  onChange,
-  placeholder,
-  required = false,
-}) {
-  return (
-    <label className="block">
-      <span className="block text-sm font-semibold text-gray-700 mb-2">
-        {label}
-        {required && (
-          <span className="text-red-500 ml-1">
-            *
-          </span>
-        )}
-      </span>
-
-      <input
-        type="text"
-        value={value}
-        onChange={(event) =>
-          onChange(event.target.value)
-        }
-        placeholder={placeholder}
-        className="w-full h-11 px-3.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition"
-      />
-    </label>
-  );
-}
-
-/* =====================================================
-   SELECT FIELD
-===================================================== */
-
-function SelectField({
-  label,
-  value,
-  onChange,
-  options,
-}) {
-  return (
-    <label className="block">
-      <span className="block text-sm font-semibold text-gray-700 mb-2">
-        {label}
-      </span>
-
-      <div className="relative">
-        <select
-          value={value}
-          onChange={(event) =>
-            onChange(event.target.value)
-          }
-          className="w-full h-11 appearance-none px-3.5 pr-9 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition"
-        >
-          {options.map((option) => (
-            <option
-              key={option}
-              value={option}
-            >
-              {option}
-            </option>
-          ))}
-        </select>
-
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-          ▾
-        </span>
-      </div>
-    </label>
   );
 }
