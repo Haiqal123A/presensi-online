@@ -1,18 +1,32 @@
 import { useState } from "react";
+
 import {
   LayoutDashboard,
   Users,
   ClipboardCheck,
   FileText,
   UserCircle,
+  History,
   Menu,
   X,
   LogOut,
   ShieldCheck,
 } from "lucide-react";
-import { NavLink, useNavigate } from "react-router-dom";
+
+import {
+  NavLink,
+  useNavigate,
+} from "react-router-dom";
+
+// ==============================
+// AUTH
+// ==============================
 
 const AUTH_STORAGE_KEY = "pkl_auth";
+
+// ==============================
+// MENU
+// ==============================
 
 const menuItems = [
   {
@@ -20,21 +34,31 @@ const menuItems = [
     path: "/admin/dashboard",
     icon: LayoutDashboard,
   },
+
   {
     label: "Data Siswa",
     path: "/admin/students",
     icon: Users,
   },
+
   {
     label: "Absensi",
     path: "/admin/attendance",
     icon: ClipboardCheck,
   },
+
   {
     label: "Izin",
     path: "/admin/izin",
     icon: FileText,
   },
+
+  {
+    label: "Riwayat",
+    path: "/admin/riwayat",
+    icon: History,
+  },
+
   {
     label: "Profile",
     path: "/admin/profile",
@@ -42,10 +66,19 @@ const menuItems = [
   },
 ];
 
+// ==============================
+// COMPONENT
+// ==============================
+
 export default function AdminNavbar() {
   const navigate = useNavigate();
+
   const [mobileOpen, setMobileOpen] =
     useState(false);
+
+  // ============================
+  // LOGOUT
+  // ============================
 
   const handleLogout = () => {
     localStorage.removeItem(
@@ -59,41 +92,51 @@ export default function AdminNavbar() {
     });
   };
 
+  // ============================
+  // RENDER
+  // ============================
+
   return (
     <header className="sticky top-0 z-50 bg-brand-blue shadow-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="h-16 flex items-center justify-between gap-4">
-          {/* BRAND */}
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 items-center justify-between gap-4">
+          {/* =====================================
+              BRAND
+          ====================================== */}
 
           <button
             type="button"
             onClick={() =>
-              navigate("/admin/dashboard")
+              navigate(
+                "/admin/dashboard"
+              )
             }
-            className="flex items-center gap-3 shrink-0"
+            className="flex shrink-0 items-center gap-3"
           >
-            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center p-1 shadow-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white p-1 shadow-sm">
               <img
                 src="/logo.jpg"
                 alt="Logo ABSENKU"
-                className="w-full h-full object-contain rounded-lg"
+                className="h-full w-full rounded-lg object-contain"
               />
             </div>
 
-            <div className="hidden sm:block text-left">
-              <p className="text-white font-extrabold text-base leading-tight">
+            <div className="hidden text-left sm:block">
+              <p className="text-base font-extrabold leading-tight text-white">
                 ABSENKU
               </p>
 
-              <p className="text-blue-100 text-[11px] leading-tight mt-0.5">
+              <p className="mt-0.5 text-[11px] leading-tight text-blue-100">
                 Admin Panel
               </p>
             </div>
           </button>
 
-          {/* DESKTOP MENU */}
+          {/* =====================================
+              DESKTOP MENU
+          ====================================== */}
 
-          <nav className="hidden lg:flex items-center gap-1">
+          <nav className="hidden items-center gap-1 lg:flex">
             {menuItems.map((item) => {
               const Icon = item.icon;
 
@@ -102,27 +145,32 @@ export default function AdminNavbar() {
                   key={item.path}
                   to={item.path}
                   className={({ isActive }) =>
-                    `flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-sm font-semibold transition ${
+                    `flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-sm font-semibold transition ${
                       isActive
-                        ? "bg-brand-yellow text-brand-blue"
+                        ? "bg-brand-yellow text-brand-blue shadow-sm"
                         : "text-white hover:bg-white/10"
                     }`
                   }
                 >
                   <Icon size={17} />
-                  <span>{item.label}</span>
+
+                  <span>
+                    {item.label}
+                  </span>
                 </NavLink>
               );
             })}
           </nav>
 
-          {/* ADMIN INFO */}
+          {/* =====================================
+              ADMIN INFO
+          ====================================== */}
 
-          <div className="hidden lg:flex items-center gap-3 shrink-0">
-            <div className="w-px h-8 bg-white/20" />
+          <div className="hidden shrink-0 items-center gap-3 lg:flex">
+            <div className="h-8 w-px bg-white/20" />
 
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10">
                 <ShieldCheck
                   size={18}
                   className="text-white"
@@ -130,11 +178,11 @@ export default function AdminNavbar() {
               </div>
 
               <div className="text-left">
-                <p className="text-white text-sm font-bold leading-tight">
+                <p className="text-sm font-bold leading-tight text-white">
                   Administrator
                 </p>
 
-                <p className="text-blue-100 text-[11px] leading-tight mt-0.5">
+                <p className="mt-0.5 text-[11px] leading-tight text-blue-100">
                   Admin PKL
                 </p>
               </div>
@@ -144,13 +192,15 @@ export default function AdminNavbar() {
               type="button"
               onClick={handleLogout}
               title="Logout"
-              className="w-9 h-9 rounded-lg text-white/80 hover:text-white hover:bg-white/10 flex items-center justify-center transition"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-white/80 transition hover:bg-white/10 hover:text-white"
             >
               <LogOut size={18} />
             </button>
           </div>
 
-          {/* MOBILE MENU BUTTON */}
+          {/* =====================================
+              MOBILE BUTTON
+          ====================================== */}
 
           <button
             type="button"
@@ -159,7 +209,7 @@ export default function AdminNavbar() {
                 (value) => !value
               )
             }
-            className="lg:hidden w-10 h-10 rounded-lg text-white hover:bg-white/10 flex items-center justify-center transition"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-white transition hover:bg-white/10 lg:hidden"
             aria-label={
               mobileOpen
                 ? "Tutup menu"
@@ -174,10 +224,12 @@ export default function AdminNavbar() {
           </button>
         </div>
 
-        {/* MOBILE MENU */}
+        {/* =====================================
+            MOBILE MENU
+        ====================================== */}
 
         {mobileOpen && (
-          <div className="lg:hidden border-t border-white/10 py-3">
+          <div className="border-t border-white/10 py-3 lg:hidden">
             <nav className="space-y-1">
               {menuItems.map((item) => {
                 const Icon = item.icon;
@@ -190,7 +242,7 @@ export default function AdminNavbar() {
                       setMobileOpen(false)
                     }
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition ${
+                      `flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold transition ${
                         isActive
                           ? "bg-brand-yellow text-brand-blue"
                           : "text-white hover:bg-white/10"
@@ -198,18 +250,23 @@ export default function AdminNavbar() {
                     }
                   >
                     <Icon size={18} />
-                    <span>{item.label}</span>
+
+                    <span>
+                      {item.label}
+                    </span>
                   </NavLink>
                 );
               })}
             </nav>
 
-            {/* MOBILE ADMIN INFO */}
+            {/* =================================
+                MOBILE ADMIN
+            ================================== */}
 
-            <div className="mt-3 pt-3 border-t border-white/10">
+            <div className="mt-3 border-t border-white/10 pt-3">
               <div className="flex items-center justify-between gap-3 px-4 py-2">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10">
                     <ShieldCheck
                       size={19}
                       className="text-white"
@@ -217,11 +274,11 @@ export default function AdminNavbar() {
                   </div>
 
                   <div>
-                    <p className="text-white text-sm font-bold">
+                    <p className="text-sm font-bold text-white">
                       Administrator
                     </p>
 
-                    <p className="text-blue-100 text-xs mt-0.5">
+                    <p className="mt-0.5 text-xs text-blue-100">
                       Admin PKL
                     </p>
                   </div>
@@ -230,9 +287,10 @@ export default function AdminNavbar() {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white hover:bg-white/10 transition"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
                 >
                   <LogOut size={17} />
+
                   Logout
                 </button>
               </div>

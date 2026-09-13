@@ -30,6 +30,7 @@ import AdminStudents from "./pages/admin/Students";
 import AdminAttendance from "./pages/admin/Attendance";
 import AdminIzin from "./pages/admin/Izin";
 import AdminProfile from "./pages/admin/Profile";
+import AdminHistory from "./pages/admin/History";
 
 // ==============================
 // AUTH
@@ -234,6 +235,21 @@ function AdminLayout() {
               element={<AdminProfile />}
             />
 
+            {/* ==========================
+                RIWAYAT
+            ========================== */}
+
+            <Route
+              path="/riwayat"
+              element={
+                <AdminHistory />
+              }
+            />
+
+            {/* ==========================
+                DEFAULT ADMIN
+            ========================== */}
+
             <Route
               path="*"
               element={
@@ -291,7 +307,7 @@ export default function App() {
           element={<AdminLayout />}
         />
 
-        {/* UNKNOWN ROUTE */}
+        {/* UNKNOWN */}
 
         <Route
           path="*"

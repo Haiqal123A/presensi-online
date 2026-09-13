@@ -18,10 +18,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [loginType, setLoginType] = useState("student");
-
-  const [nisn, setNisn] = useState("");
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
 
   const [showPassword, setShowPassword] = useState(false);
@@ -29,12 +26,20 @@ export default function Login() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // =========================================================
+  // CEK SESSION
+  // =========================================================
+
   useEffect(() => {
     const savedData = getAuthSession();
 
-    if (!savedData) return;
+    if (!savedData?.isLoggedIn) {
+      return;
+    }
 
-    if (savedData?.user?.role === "admin") {
+    const role = savedData?.user?.role;
+
+    if (role === "admin") {
       navigate("/admin/dashboard", {
         replace: true,
       });
@@ -45,22 +50,19 @@ export default function Login() {
     }
   }, [navigate]);
 
+  // =========================================================
+  // LOGIN
+  // =========================================================
+
   const handleLogin = async (event) => {
     event.preventDefault();
 
     setError("");
 
-    const identifier =
-      loginType === "admin"
-        ? email.trim()
-        : nisn.trim();
+    const cleanIdentifier = identifier.trim();
 
-    if (!identifier) {
-      setError(
-        loginType === "admin"
-          ? "Email admin wajib diisi."
-          : "NISN wajib diisi."
-      );
+    if (!cleanIdentifier) {
+      setError("Email atau NISN wajib diisi.");
       return;
     }
 
@@ -72,34 +74,25 @@ export default function Login() {
     setIsLoading(true);
 
     try {
+      /*
+       * Backend menerima:
+       *
+       * {
+       *   identifier: "email atau NISN",
+       *   password: "password"
+       * }
+       */
+
       const response = await login(
-        identifier,
+        cleanIdentifier,
         password
       );
 
-      /*
-       * RESPONSE BACKEND:
-       *
-       * {
-       *   success: true,
-       *   message: "Login berhasil.",
-       *   data: {
-       *     access_token: "...",
-       *     refresh_token: "...",
-       *     expires_in: 3600,
-       *     expires_at: 1234567890,
-       *     user: {
-       *       id: "...",
-       *       full_name: "...",
-       *       email: "...",
-       *       nisn: "...",
-       *       school: "...",
-       *       major: "...",
-       *       role: "user" / "admin"
-       *     }
-       *   }
-       * }
-       */
+      console.log("LOGIN RESPONSE:", response);
+
+      // =====================================================
+      // AMBIL DATA RESPONSE
+      // =====================================================
 
       const responseData = response?.data;
 
@@ -109,10 +102,12 @@ export default function Login() {
         );
       }
 
-      // Backend menggunakan "access_token", BUKAN "token".
-      const token = responseData?.access_token;
+      // Backend menggunakan access_token
+      const token =
+        responseData?.access_token;
 
-      const backendUser = responseData?.user;
+      const backendUser =
+        responseData?.user;
 
       if (!token) {
         throw new Error(
@@ -126,32 +121,78 @@ export default function Login() {
         );
       }
 
-      /*
-       * BACKEND ROLE:
-       *
-       * user  -> siswa
-       * admin -> admin
-       *
-       * FRONTEND ROLE:
-       *
-       * student
-       * admin
-       */
+      // =====================================================
+      // ROLE
+      // =====================================================
 
-      const backendRole = backendUser?.role;
+      const backendRole =
+        backendUser?.role || "";
 
       const role =
         backendRole === "admin"
           ? "admin"
           : "student";
 
+      // =====================================================
+      // DATA USER
+      // =====================================================
+
+      const user = {
+        id:
+          backendUser?.id || "",
+
+        name:
+          backendUser?.full_name ||
+          backendUser?.name ||
+          "User",
+
+        full_name:
+          backendUser?.full_name ||
+          backendUser?.name ||
+          "User",
+
+        email:
+          backendUser?.email || "",
+
+        nisn:
+          backendUser?.nisn || "",
+
+        school:
+          backendUser?.school || "",
+
+        major:
+          backendUser?.major || "",
+
+        phone:
+          backendUser?.phone || "",
+
+        birth_place:
+          backendUser?.birth_place || "",
+
+        birth_date:
+          backendUser?.birth_date || "",
+
+        gender:
+          backendUser?.gender || "",
+
+        nik:
+          backendUser?.nik || "",
+
+        role,
+
+        // Role asli dari backend
+        backendRole,
+      };
+
+      // =====================================================
+      // AUTH SESSION
+      // =====================================================
+
       const authData = {
         isLoggedIn: true,
 
-        // Simpan access token backend
         token,
 
-        // Simpan refresh token jika nanti dibutuhkan
         refreshToken:
           responseData?.refresh_token || "",
 
@@ -161,67 +202,21 @@ export default function Login() {
         expiresAt:
           responseData?.expires_at || null,
 
-        user: {
-          id: backendUser?.id || "",
+        user,
 
-          name:
-            backendUser?.full_name ||
-            "Siswa PKL",
-
-          full_name:
-            backendUser?.full_name ||
-            "Siswa PKL",
-
-          email:
-            backendUser?.email || "",
-
-          nisn:
-            backendUser?.nisn || "",
-
-          school:
-            backendUser?.school || "",
-
-          major:
-            backendUser?.major || "",
-
-          phone:
-            backendUser?.phone || "",
-
-          birth_place:
-            backendUser?.birth_place || "",
-
-          birth_date:
-            backendUser?.birth_date || "",
-
-          gender:
-            backendUser?.gender || "",
-
-          nik:
-            backendUser?.nik || "",
-
-          role,
-
-          // Simpan role asli dari backend
-          backendRole:
-            backendRole || "",
-        },
-
-        loginAt: new Date().toISOString(),
+        loginAt:
+          new Date().toISOString(),
       };
 
-      /*
-       * Simpan token + user ke localStorage.
-       *
-       * saveAuthSession() juga menyimpan:
-       * localStorage["token"] = access_token
-       */
+      // Simpan session
       saveAuthSession(authData);
 
-      /*
-       * Pastikan session benar-benar tersimpan
-       * sebelum pindah halaman.
-       */
-      const savedSession = getAuthSession();
+      // =====================================================
+      // VALIDASI SESSION
+      // =====================================================
+
+      const savedSession =
+        getAuthSession();
 
       if (!savedSession?.token) {
         throw new Error(
@@ -229,28 +224,55 @@ export default function Login() {
         );
       }
 
-      const redirectTo =
-        location.state?.from ||
-        (role === "admin"
-          ? "/admin/dashboard"
-          : "/user/dashboard");
+      // =====================================================
+      // REDIRECT
+      // =====================================================
+
+      const requestedPath =
+        location.state?.from;
+
+      let redirectTo;
+
+      /*
+       * Kalau sebelumnya user diarahkan
+       * ke halaman tertentu, coba kembali ke sana.
+       *
+       * Kalau tidak ada:
+       *
+       * admin   -> /admin/dashboard
+       * student -> /user/dashboard
+       */
+
+      if (requestedPath) {
+        redirectTo = requestedPath;
+      } else if (role === "admin") {
+        redirectTo = "/admin/dashboard";
+      } else {
+        redirectTo = "/user/dashboard";
+      }
 
       navigate(redirectTo, {
         replace: true,
       });
     } catch (error) {
-      console.error("Login gagal:", error);
+      console.error(
+        "Login gagal:",
+        error
+      );
 
       if (error?.status === 429) {
         setError(
           "Terlalu banyak percobaan login. Silakan coba lagi beberapa saat."
         );
-      } else if (error?.status === 401) {
+      } else if (
+        error?.status === 401
+      ) {
         setError(
           "Email/NISN atau password yang Anda masukkan salah."
         );
       } else if (
-        error?.code === "INVALID_CREDENTIALS"
+        error?.code ===
+        "INVALID_CREDENTIALS"
       ) {
         setError(
           "Email/NISN atau password yang Anda masukkan salah."
@@ -266,32 +288,29 @@ export default function Login() {
     }
   };
 
-  const handleLoginTypeChange = (type) => {
-    setLoginType(type);
-
-    setError("");
-    setPassword("");
-
-    if (type === "admin") {
-      setNisn("");
-    } else {
-      setEmail("");
-    }
-  };
+  // =========================================================
+  // RENDER
+  // =========================================================
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-blue-light via-white to-white flex items-center justify-center px-4 py-8">
+
       <div className="w-full max-w-md">
 
-        {/* LOGO / BRAND */}
+        {/* =================================================
+            LOGO
+        ================================================= */}
 
         <div className="text-center mb-7">
+
           <div className="w-20 h-20 rounded-2xl bg-white shadow-lg border border-gray-100 flex items-center justify-center mx-auto p-2">
+
             <img
               src="/logo.jpg"
               alt="Logo ABSENKU"
               className="w-full h-full object-contain rounded-xl"
             />
+
           </div>
 
           <h1 className="text-2xl font-extrabold text-gray-900 mt-5">
@@ -301,140 +320,102 @@ export default function Login() {
           <p className="text-sm text-gray-500 mt-1">
             Sistem Absensi PKL
           </p>
+
         </div>
 
-        {/* LOGIN CARD */}
+        {/* =================================================
+            LOGIN CARD
+        ================================================= */}
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-xl p-6 sm:p-7">
 
           <div className="mb-6">
+
             <h2 className="text-xl font-bold text-gray-900">
-              Selamat Datang
+              Selamat Datang 👋
             </h2>
 
             <p className="text-sm text-gray-500 mt-1">
-              Silakan masuk ke akun Anda.
+              Silakan masuk menggunakan akun Anda.
             </p>
-          </div>
-
-          {/* LOGIN TYPE */}
-
-          <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-xl mb-6">
-
-            <button
-              type="button"
-              onClick={() =>
-                handleLoginTypeChange("student")
-              }
-              className={`h-11 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition ${
-                loginType === "student"
-                  ? "bg-white text-brand-blue shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <UserRound size={17} />
-              Siswa
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                handleLoginTypeChange("admin")
-              }
-              className={`h-11 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition ${
-                loginType === "admin"
-                  ? "bg-white text-brand-blue shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <Lock size={17} />
-              Admin
-            </button>
 
           </div>
 
-          {/* ERROR */}
+          {/* =================================================
+              ERROR
+          ================================================= */}
 
           {error && (
             <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700 font-medium">
+
               {error}
+
             </div>
           )}
+
+          {/* =================================================
+              FORM
+          ================================================= */}
 
           <form
             onSubmit={handleLogin}
             className="space-y-5"
           >
 
-            {/* STUDENT */}
-
-            {loginType === "student" && (
-              <div>
-                <label
-                  htmlFor="nisn"
-                  className="block text-sm font-semibold text-gray-700 mb-2"
-                >
-                  NISN
-                </label>
-
-                <div className="relative">
-                  <UserRound
-                    size={18}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-
-                  <input
-                    id="nisn"
-                    type="text"
-                    value={nisn}
-                    onChange={(event) =>
-                      setNisn(event.target.value)
-                    }
-                    placeholder="Masukkan NISN"
-                    autoComplete="username"
-                    disabled={isLoading}
-                    className="w-full h-12 pl-11 pr-4 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 disabled:opacity-60 transition"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* ADMIN */}
-
-            {loginType === "admin" && (
-              <div>
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-semibold text-gray-700 mb-2"
-                >
-                  Email Admin
-                </label>
-
-                <div className="relative">
-                  <Mail
-                    size={18}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(event) =>
-                      setEmail(event.target.value)
-                    }
-                    placeholder="Masukkan email admin"
-                    autoComplete="username"
-                    disabled={isLoading}
-                    className="w-full h-12 pl-11 pr-4 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 disabled:opacity-60 transition"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* PASSWORD */}
+            {/* =================================================
+                EMAIL / NISN
+            ================================================= */}
 
             <div>
+
+              <label
+                htmlFor="identifier"
+                className="block text-sm font-semibold text-gray-700 mb-2"
+              >
+                Email atau NISN
+              </label>
+
+              <div className="relative">
+
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+
+                  {identifier.includes("@") ? (
+                    <Mail size={18} />
+                  ) : (
+                    <UserRound size={18} />
+                  )}
+
+                </div>
+
+                <input
+                  id="identifier"
+                  type="text"
+                  value={identifier}
+                  onChange={(event) =>
+                    setIdentifier(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Masukkan email atau NISN"
+                  autoComplete="username"
+                  disabled={isLoading}
+                  className="w-full h-12 pl-11 pr-4 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 disabled:opacity-60 transition"
+                />
+
+              </div>
+
+              <p className="text-xs text-gray-400 mt-2">
+                Siswa dapat menggunakan NISN atau email.
+              </p>
+
+            </div>
+
+            {/* =================================================
+                PASSWORD
+            ================================================= */}
+
+            <div>
+
               <label
                 htmlFor="password"
                 className="block text-sm font-semibold text-gray-700 mb-2"
@@ -443,6 +424,7 @@ export default function Login() {
               </label>
 
               <div className="relative">
+
                 <Lock
                   size={18}
                   className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
@@ -457,7 +439,9 @@ export default function Login() {
                   }
                   value={password}
                   onChange={(event) =>
-                    setPassword(event.target.value)
+                    setPassword(
+                      event.target.value
+                    )
                   }
                   placeholder="Masukkan password"
                   autoComplete="current-password"
@@ -480,48 +464,68 @@ export default function Login() {
                       : "Tampilkan password"
                   }
                 >
+
                   {showPassword ? (
                     <EyeOff size={18} />
                   ) : (
                     <Eye size={18} />
                   )}
+
                 </button>
+
               </div>
+
             </div>
 
-            {/* SUBMIT */}
+            {/* =================================================
+                SUBMIT
+            ================================================= */}
 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full h-12 rounded-xl bg-brand-blue text-white text-sm font-bold hover:bg-brand-blue-dark disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center"
+              className="w-full h-12 rounded-xl bg-brand-blue text-white text-sm font-bold hover:bg-brand-blue-dark disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
             >
-              {isLoading
-                ? "Memproses..."
-                : loginType === "admin"
-                ? "Masuk sebagai Admin"
-                : "Masuk sebagai Siswa"}
+
+              {isLoading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  Memproses...
+                </>
+              ) : (
+                "Masuk"
+              )}
+
             </button>
 
           </form>
 
-          {/* INFO */}
+          {/* =================================================
+              INFO
+          ================================================= */}
 
           <div className="mt-5 p-3.5 rounded-xl bg-gray-50 border border-gray-100">
+
             <p className="text-xs text-gray-500 leading-relaxed">
               Gunakan akun yang sudah terdaftar
-              pada sistem. Data login akan
-              diverifikasi langsung oleh backend.
+              pada sistem. Role akun akan ditentukan
+              secara otomatis oleh backend.
             </p>
+
           </div>
 
         </div>
+
+        {/* =================================================
+            FOOTER
+        ================================================= */}
 
         <p className="text-center text-xs text-gray-400 mt-6">
           ABSENKU • Sistem Absensi PKL
         </p>
 
       </div>
+
     </div>
   );
 }

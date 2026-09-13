@@ -1,17 +1,31 @@
-const API_BASE_URL = "https://presensi-be.vercel.app";
+/* =========================================================
+   API CONFIG
+   ========================================================= */
+
+const API_BASE_URL = (
+  import.meta.env.VITE_API_URL ||
+  "https://presensi-be.vercel.app"
+).replace(/\/+$/, "");
+
+
+/* =========================================================
+   STORAGE KEYS
+   ========================================================= */
 
 export const AUTH_STORAGE_KEY = "pkl_auth";
 export const TOKEN_STORAGE_KEY = "token";
+export const USER_STORAGE_KEY = "user";
 
-// =========================================================
-// REQUEST HELPER
-// =========================================================
+
+/* =========================================================
+   REQUEST HELPER
+   ========================================================= */
 
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem(TOKEN_STORAGE_KEY);
 
   const headers = {
-    Accept: "application/json",
+    "Content-Type": "application/json",
     ...(options.headers || {}),
   };
 
@@ -19,244 +33,347 @@ async function request(endpoint, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  // Jangan set Content-Type JSON untuk FormData.
-  // Browser akan otomatis menentukan multipart/form-data + boundary.
-  if (!(options.body instanceof FormData)) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  let response;
-
-  try {
-    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(
+    `${API_BASE_URL}${endpoint}`,
+    {
       ...options,
       headers,
-    });
-  } catch (error) {
-    const networkError = new Error(
-      "Tidak dapat terhubung ke server. Periksa koneksi internet atau konfigurasi server."
-    );
+    }
+  );
 
-    networkError.code = "NETWORK_ERROR";
-    networkError.originalError = error;
-
-    throw networkError;
-  }
-
-  let result = null;
+  let data = null;
 
   try {
-    result = await response.json();
+    data = await response.json();
   } catch {
-    result = null;
+    data = null;
   }
 
-  if (!response.ok || result?.success === false) {
+  if (!response.ok) {
     const message =
-      result?.message ||
-      result?.error?.message ||
-      `Terjadi kesalahan pada server (${response.status}).`;
+      data?.message ||
+      data?.error ||
+      `Request gagal (${response.status})`;
 
     const error = new Error(message);
 
     error.status = response.status;
     error.code =
-      result?.code ||
-      result?.error?.code ||
+      data?.code ||
+      data?.error_code ||
       null;
-    error.response = result;
+    error.response = data;
 
     throw error;
   }
 
-  return result;
+  return data;
 }
 
-// =========================================================
-// AUTH
-// =========================================================
 
-export async function login(identifier, password) {
-  return request("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify({
-      identifier,
-      password,
-    }),
-  });
+/* =========================================================
+   AUTH
+   ========================================================= */
+
+/*
+  Login menggunakan Email atau NISN.
+
+  Tidak ada pilihan Admin / Siswa.
+  Role ditentukan oleh backend.
+*/
+
+export async function login(
+  identifier,
+  password
+) {
+  return request(
+    "/api/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        identifier,
+        password,
+      }),
+    }
+  );
 }
+
+
+/*
+  Ambil user yang sedang login.
+*/
 
 export async function getMe() {
-  return request("/api/auth/me", {
-    method: "GET",
-  });
-}
-
-// =========================================================
-// USER PROFILE
-// =========================================================
-
-export async function updateProfile(data) {
-  return request("/api/auth/profile", {
-    method: "PUT",
-    body: JSON.stringify({
-      full_name: data?.full_name || "",
-      phone: data?.phone || "",
-      major: data?.major || "",
-      birth_place: data?.birth_place || "",
-      birth_date: data?.birth_date || "",
-    }),
-  });
-}
-
-// =========================================================
-// USER ATTENDANCE
-// =========================================================
-
-export async function getTodayAttendance() {
-  return request("/api/attendance/today", {
-    method: "GET",
-  });
-}
-
-export async function checkIn(data) {
-  return request("/api/attendance/check-in", {
-    method: "POST",
-    body: JSON.stringify({
-      work_mode: data?.work_mode,
-      latitude: data?.latitude,
-      longitude: data?.longitude,
-      accuracy: data?.accuracy,
-      photo: data?.photo,
-    }),
-  });
-}
-
-export async function checkOut(data) {
-  return request("/api/attendance/check-out", {
-    method: "POST",
-    body: JSON.stringify({
-      work_mode: data?.work_mode,
-      latitude: data?.latitude,
-      longitude: data?.longitude,
-      accuracy: data?.accuracy,
-      photo: data?.photo,
-    }),
-  });
-}
-
-export async function getAttendanceHistory({
-  page = 1,
-  limit = 10,
-  month,
-  year,
-} = {}) {
-  const params = new URLSearchParams();
-
-  params.set("page", page);
-  params.set("limit", limit);
-
-  if (
-    month !== undefined &&
-    month !== null &&
-    month !== ""
-  ) {
-    params.set("month", month);
-  }
-
-  if (
-    year !== undefined &&
-    year !== null &&
-    year !== ""
-  ) {
-    params.set("year", year);
-  }
-
   return request(
-    `/api/attendance/history?${params.toString()}`,
+    "/api/auth/me",
     {
       method: "GET",
     }
   );
 }
 
-// =========================================================
-// USER IZIN
-// =========================================================
 
-export async function submitIzin({
-  tipeIzin,
-  tanggalMulai,
-  tanggalSelesai,
-  alasan,
-  lampiran,
-}) {
-  const formData = new FormData();
+/*
+  Ambil profile user.
+*/
 
-  formData.append(
-    "tipe_izin",
-    tipeIzin || ""
+export async function getProfile() {
+  return request(
+    "/api/auth/profile",
+    {
+      method: "GET",
+    }
+  );
+}
+
+
+/*
+  Update profile user.
+*/
+
+export async function updateProfile(
+  data = {}
+) {
+  return request(
+    "/api/auth/profile",
+    {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }
+  );
+}
+
+
+/*
+  Alias untuk halaman Admin Profile.
+*/
+
+export async function updateAdminProfile(
+  data = {}
+) {
+  return updateProfile(data);
+}
+
+
+/* =========================================================
+   ATTENDANCE - STUDENT
+   ========================================================= */
+
+export async function getTodayAttendance() {
+  return request(
+    "/api/attendance/today",
+    {
+      method: "GET",
+    }
+  );
+}
+
+
+export async function checkIn(
+  data = {}
+) {
+  return request(
+    "/api/attendance/check-in",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    }
+  );
+}
+
+
+export async function checkOut(
+  data = {}
+) {
+  return request(
+    "/api/attendance/check-out",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    }
+  );
+}
+
+
+export async function getAttendanceHistory(
+  params = {}
+) {
+  const query =
+    new URLSearchParams();
+
+  Object.entries(params).forEach(
+    ([key, value]) => {
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== ""
+      ) {
+        query.append(key, value);
+      }
+    }
   );
 
-  formData.append(
-    "tanggal_mulai",
-    tanggalMulai || ""
-  );
+  const queryString =
+    query.toString();
 
-  formData.append(
-    "tanggal_selesai",
-    tanggalSelesai || ""
+  return request(
+    `/api/attendance/history${
+      queryString
+        ? `?${queryString}`
+        : ""
+    }`,
+    {
+      method: "GET",
+    }
   );
+}
 
-  formData.append(
-    "alasan",
-    alasan || ""
+
+/* =========================================================
+   IZIN - STUDENT
+   ========================================================= */
+
+export async function getIzin() {
+  return request(
+    "/api/izin",
+    {
+      method: "GET",
+    }
   );
+}
 
-  if (lampiran) {
-    formData.append(
-      "lampiran",
-      lampiran
+
+/*
+  Digunakan oleh AttendanceHistory.jsx.
+*/
+
+export async function getMyIzin() {
+  return request(
+    "/api/izin",
+    {
+      method: "GET",
+    }
+  );
+}
+
+
+/*
+  Membuat pengajuan izin.
+*/
+
+export async function createIzin(
+  data = {}
+) {
+  return request(
+    "/api/izin",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    }
+  );
+}
+
+
+/*
+  Alias yang digunakan oleh Izin.jsx.
+*/
+
+export async function submitIzin(
+  data = {}
+) {
+  return createIzin(data);
+}
+
+
+/*
+  Upload lampiran izin.
+*/
+
+export async function uploadIzinAttachment(
+  id,
+  file
+) {
+  if (!id) {
+    throw new Error(
+      "ID izin tidak ditemukan."
     );
   }
 
-  return request("/api/izin", {
-    method: "POST",
-    body: formData,
-  });
-}
-
-export async function getMyIzin(status = "") {
-  const params = new URLSearchParams();
-
-  if (status) {
-    params.set("status", status);
+  if (!file) {
+    throw new Error(
+      "File lampiran tidak ditemukan."
+    );
   }
 
-  const query = params.toString();
+  const token =
+    localStorage.getItem(
+      TOKEN_STORAGE_KEY
+    );
 
-  return request(
-    `/api/izin${query ? `?${query}` : ""}`,
-    {
-      method: "GET",
-    }
+  const formData =
+    new FormData();
+
+  formData.append(
+    "file",
+    file
   );
+
+  const response =
+    await fetch(
+      `${API_BASE_URL}/api/izin/${id}/attachment`,
+      {
+        method: "POST",
+        headers: {
+          ...(token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {}),
+        },
+        body: formData,
+      }
+    );
+
+  let data = null;
+
+  try {
+    data =
+      await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const error =
+      new Error(
+        data?.message ||
+          data?.error ||
+          `Upload gagal (${response.status})`
+      );
+
+    error.status =
+      response.status;
+
+    error.code =
+      data?.code ||
+      data?.error_code ||
+      null;
+
+    error.response = data;
+
+    throw error;
+  }
+
+  return data;
 }
 
-export async function getIzinAttachment(id) {
-  return request(
-    `/api/izin/${id}/attachment`,
-    {
-      method: "GET",
-    }
-  );
-}
 
-// =========================================================
-// ADMIN DASHBOARD
-// =========================================================
+/* =========================================================
+   ADMIN - ATTENDANCE
+   ========================================================= */
 
-export async function getAdminTodayAttendance() {
+export async function getAdminAttendanceToday() {
   return request(
     "/api/admin/attendance/today",
     {
@@ -265,43 +382,48 @@ export async function getAdminTodayAttendance() {
   );
 }
 
-// =========================================================
-// ADMIN ATTENDANCE
-// =========================================================
 
-export async function getAdminAttendanceHistory({
-  startDate,
-  endDate,
-  search,
-} = {}) {
-  const params = new URLSearchParams();
+/*
+  Alias untuk Dashboard.jsx.
 
-  if (startDate) {
-    params.set(
-      "start_date",
-      startDate
-    );
-  }
+  Kedua nama ini menggunakan endpoint
+  admin attendance hari ini yang sama.
+*/
 
-  if (endDate) {
-    params.set(
-      "end_date",
-      endDate
-    );
-  }
+export async function getAdminTodayAttendance() {
+  return getAdminAttendanceToday();
+}
 
-  if (search) {
-    params.set(
-      "search",
-      search
-    );
-  }
 
-  const query = params.toString();
+export async function getAdminAttendanceHistory(
+  params = {}
+) {
+  const query =
+    new URLSearchParams();
+
+  Object.entries(params).forEach(
+    ([key, value]) => {
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== ""
+      ) {
+        query.append(
+          key,
+          value
+        );
+      }
+    }
+  );
+
+  const queryString =
+    query.toString();
 
   return request(
     `/api/admin/attendance/history${
-      query ? `?${query}` : ""
+      queryString
+        ? `?${queryString}`
+        : ""
     }`,
     {
       method: "GET",
@@ -309,42 +431,69 @@ export async function getAdminAttendanceHistory({
   );
 }
 
-// =========================================================
-// ADMIN STUDENTS
-// =========================================================
+
+/* =========================================================
+   ADMIN - STUDENTS
+   ========================================================= */
 
 export async function getAdminStudents() {
   return request(
-    "/api/admin/students",
+    `/api/admin/students?_=${Date.now()}`,
     {
       method: "GET",
+      cache: "no-store",
     }
   );
 }
 
-export async function createAdminStudent(data) {
+
+export async function createAdminStudent(
+  data = {}
+) {
   return request(
     "/api/admin/students",
     {
       method: "POST",
       body: JSON.stringify({
-        email: data?.email || "",
-        password: data?.password || "",
+        email:
+          data?.email || "",
+
+        password:
+          data?.password || "",
+
         full_name:
           data?.full_name ||
           data?.name ||
           "",
-        nisn: data?.nisn || "",
-        school: data?.school || "",
-        major: data?.major || "",
+
+        nisn:
+          data?.nisn || "",
+
+        school:
+          data?.school || "",
+
+        major:
+          data?.major || "",
+
+        phone:
+          data?.phone || "",
+
+        gender:
+          data?.gender || "",
+
+        class_name:
+          data?.class_name ||
+          data?.className ||
+          "",
       }),
     }
   );
 }
 
-// =========================================================
-// ADMIN IZIN
-// =========================================================
+
+/* =========================================================
+   ADMIN - IZIN
+   ========================================================= */
 
 export async function getAdminIzin() {
   return request(
@@ -355,51 +504,275 @@ export async function getAdminIzin() {
   );
 }
 
+
 export async function updateAdminIzinStatus(
   id,
-  data
+  status
 ) {
   return request(
     `/api/admin/izin/${id}/status`,
     {
-      method: "PATCH",
+      method: "PUT",
       body: JSON.stringify({
-        status:
-          data?.status || "",
-        catatan_admin:
-          data?.catatan_admin || "",
+        status,
       }),
     }
   );
 }
 
-// =========================================================
-// ADMIN EXPORT
-// =========================================================
 
-export async function downloadAdminAttendanceExcel() {
-  return request(
-    "/api/admin/attendance/export",
-    {
-      method: "GET",
+/* =========================================================
+   DOWNLOAD FILE
+   ========================================================= */
+
+async function downloadFile(
+  endpoint,
+  filename
+) {
+  const token =
+    localStorage.getItem(
+      TOKEN_STORAGE_KEY
+    );
+
+  const response =
+    await fetch(
+      `${API_BASE_URL}${endpoint}`,
+      {
+        method: "GET",
+        headers: {
+          ...(token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {}),
+        },
+      }
+    );
+
+  if (!response.ok) {
+    let message =
+      `Download gagal (${response.status})`;
+
+    try {
+      const data =
+        await response.json();
+
+      message =
+        data?.message ||
+        data?.error ||
+        message;
+    } catch {
+      // Response bukan JSON
     }
+
+    const error =
+      new Error(message);
+
+    error.status =
+      response.status;
+
+    throw error;
+  }
+
+  const blob =
+    await response.blob();
+
+  const url =
+    window.URL.createObjectURL(
+      blob
+    );
+
+  const link =
+    document.createElement(
+      "a"
+    );
+
+  link.href = url;
+  link.download = filename;
+
+  document.body.appendChild(
+    link
+  );
+
+  link.click();
+
+  link.remove();
+
+  window.URL.revokeObjectURL(
+    url
+  );
+
+  return true;
+}
+
+
+/* =========================================================
+   EXPORT ADMIN ATTENDANCE - EXCEL
+   ========================================================= */
+
+export async function downloadAdminAttendanceExcel(
+  params = {}
+) {
+  const query =
+    new URLSearchParams();
+
+  Object.entries(params).forEach(
+    ([key, value]) => {
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== ""
+      ) {
+        query.append(
+          key,
+          value
+        );
+      }
+    }
+  );
+
+  const queryString =
+    query.toString();
+
+  return downloadFile(
+    `/api/admin/attendance/export/excel${
+      queryString
+        ? `?${queryString}`
+        : ""
+    }`,
+    "attendance.xlsx"
   );
 }
 
-export async function downloadAdminAttendancePdf() {
-  return request(
-    "/api/admin/attendance/export/pdf",
-    {
-      method: "GET",
+
+/* =========================================================
+   EXPORT ADMIN ATTENDANCE - PDF
+   ========================================================= */
+
+export async function downloadAdminAttendancePdf(
+  params = {}
+) {
+  const query =
+    new URLSearchParams();
+
+  Object.entries(params).forEach(
+    ([key, value]) => {
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== ""
+      ) {
+        query.append(
+          key,
+          value
+        );
+      }
     }
+  );
+
+  const queryString =
+    query.toString();
+
+  return downloadFile(
+    `/api/admin/attendance/export/pdf${
+      queryString
+        ? `?${queryString}`
+        : ""
+    }`,
+    "attendance.pdf"
   );
 }
 
-// =========================================================
-// AUTH SESSION
-// =========================================================
 
-export function saveAuthSession(authData) {
+/* =========================================================
+   TOKEN HELPERS
+   ========================================================= */
+
+export function saveToken(
+  token
+) {
+  if (token) {
+    localStorage.setItem(
+      TOKEN_STORAGE_KEY,
+      token
+    );
+  }
+}
+
+
+export function getToken() {
+  return localStorage.getItem(
+    TOKEN_STORAGE_KEY
+  );
+}
+
+
+export function removeToken() {
+  localStorage.removeItem(
+    TOKEN_STORAGE_KEY
+  );
+}
+
+
+/* =========================================================
+   USER HELPERS
+   ========================================================= */
+
+export function saveUser(
+  user
+) {
+  if (user) {
+    localStorage.setItem(
+      USER_STORAGE_KEY,
+      JSON.stringify(user)
+    );
+  }
+}
+
+
+export function getUser() {
+  const user =
+    localStorage.getItem(
+      USER_STORAGE_KEY
+    );
+
+  if (!user) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(
+      user
+    );
+  } catch {
+    localStorage.removeItem(
+      USER_STORAGE_KEY
+    );
+
+    return null;
+  }
+}
+
+
+export function removeUser() {
+  localStorage.removeItem(
+    USER_STORAGE_KEY
+  );
+}
+
+
+/* =========================================================
+   AUTH SESSION
+   ========================================================= */
+
+export function saveAuthSession(
+  authData
+) {
+  if (!authData) {
+    return;
+  }
+
   localStorage.setItem(
     AUTH_STORAGE_KEY,
     JSON.stringify(authData)
@@ -411,7 +784,17 @@ export function saveAuthSession(authData) {
       authData.token
     );
   }
+
+  if (authData?.user) {
+    localStorage.setItem(
+      USER_STORAGE_KEY,
+      JSON.stringify(
+        authData.user
+      )
+    );
+  }
 }
+
 
 export function getAuthSession() {
   const savedData =
@@ -425,116 +808,76 @@ export function getAuthSession() {
 
   try {
     const parsedData =
-      JSON.parse(savedData);
+      JSON.parse(
+        savedData
+      );
 
     if (
-      parsedData?.isLoggedIn !== true
+      parsedData?.isLoggedIn !==
+      true
     ) {
       return null;
     }
 
     return parsedData;
-  } catch (error) {
-    console.error(
-      "Gagal membaca session login:",
-      error
+  } catch {
+    localStorage.removeItem(
+      AUTH_STORAGE_KEY
     );
 
     return null;
   }
 }
 
+
+/*
+  Memperbarui data user yang
+  tersimpan di browser.
+
+  Dipakai oleh Profile.jsx.
+*/
+
 export function updateStoredUser(
-  backendUser
+  data = {}
 ) {
-  const currentSession =
-    getAuthSession();
-
-  if (!currentSession) {
-    return;
-  }
-
   const currentUser =
-    currentSession.user || {};
+    getUser() || {};
 
   const updatedUser = {
     ...currentUser,
-
-    id:
-      backendUser?.id ??
-      currentUser.id ??
-      "",
-
-    role:
-      backendUser?.role === "admin"
-        ? "admin"
-        : currentUser.role || "student",
-
-    backendRole:
-      backendUser?.role ??
-      currentUser.backendRole ??
-      "",
-
-    email:
-      backendUser?.email ??
-      currentUser.email ??
-      "",
-
-    name:
-      backendUser?.full_name ??
-      backendUser?.name ??
-      currentUser.name ??
-      "",
-
-    full_name:
-      backendUser?.full_name ??
-      backendUser?.name ??
-      currentUser.full_name ??
-      "",
-
-    nisn:
-      backendUser?.nisn ??
-      currentUser.nisn ??
-      "",
-
-    school:
-      backendUser?.school ??
-      currentUser.school ??
-      "",
-
-    major:
-      backendUser?.major ??
-      currentUser.major ??
-      "",
-
-    phone:
-      backendUser?.phone ??
-      currentUser.phone ??
-      "",
-
-    birth_place:
-      backendUser?.birth_place ??
-      currentUser.birth_place ??
-      "",
-
-    birth_date:
-      backendUser?.birth_date ??
-      currentUser.birth_date ??
-      "",
+    ...data,
   };
 
-  const updatedSession = {
-    ...currentSession,
-    user: updatedUser,
-  };
-
-  localStorage.setItem(
-    AUTH_STORAGE_KEY,
-    JSON.stringify(
-      updatedSession
-    )
+  /*
+    Simpan ke localStorage "user".
+  */
+  saveUser(
+    updatedUser
   );
+
+  /*
+    Update juga session "pkl_auth".
+  */
+  const currentSession =
+    getAuthSession();
+
+  if (currentSession) {
+    const updatedSession = {
+      ...currentSession,
+      user: updatedUser,
+    };
+
+    localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify(
+        updatedSession
+      )
+    );
+  }
+
+  return updatedUser;
 }
+
 
 export function clearAuthSession() {
   localStorage.removeItem(
@@ -544,10 +887,96 @@ export function clearAuthSession() {
   localStorage.removeItem(
     TOKEN_STORAGE_KEY
   );
+
+  localStorage.removeItem(
+    USER_STORAGE_KEY
+  );
 }
 
-// =========================================================
-// API BASE URL
-// =========================================================
 
-export { API_BASE_URL };
+/* =========================================================
+   LOGOUT
+   ========================================================= */
+
+export function logout() {
+  clearAuthSession();
+}
+
+
+/* =========================================================
+   DEFAULT API OBJECT
+   ========================================================= */
+
+const api = {
+  /* AUTH */
+  login,
+  getMe,
+  getProfile,
+  updateProfile,
+  updateAdminProfile,
+
+  /* ATTENDANCE */
+  getTodayAttendance,
+  checkIn,
+  checkOut,
+  getAttendanceHistory,
+
+  /* IZIN */
+  getIzin,
+  getMyIzin,
+  createIzin,
+  submitIzin,
+  uploadIzinAttachment,
+
+  /* ADMIN ATTENDANCE */
+  getAdminAttendanceToday,
+  getAdminTodayAttendance,
+  getAdminAttendanceHistory,
+
+  /* ADMIN STUDENTS */
+  getAdminStudents,
+  createAdminStudent,
+
+  /* ADMIN IZIN */
+  getAdminIzin,
+  updateAdminIzinStatus,
+
+  /* EXPORT */
+  downloadAdminAttendanceExcel,
+  downloadAdminAttendancePdf,
+
+  /* TOKEN */
+  saveToken,
+  getToken,
+  removeToken,
+
+  /* USER */
+  saveUser,
+  getUser,
+  removeUser,
+  updateStoredUser,
+
+  /* SESSION */
+  saveAuthSession,
+  getAuthSession,
+  clearAuthSession,
+
+  /* LOGOUT */
+  logout,
+};
+
+
+/* =========================================================
+   DEFAULT EXPORT
+   ========================================================= */
+
+export default api;
+
+
+/* =========================================================
+   API BASE URL EXPORT
+   ========================================================= */
+
+export {
+  API_BASE_URL,
+};
